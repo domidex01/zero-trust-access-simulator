@@ -7,11 +7,12 @@
 ## Status
 - [x] T1 Init module, scaffold directories, git repo
 - [x] T2 main.go — testable dispatch: `--version`, usage/unknown → 64, subcommand stubs
-- [ ] T3 Makefile — build / test / fmt / vet / run-demo
+- [x] T3 Makefile — build / test / fmt / vet / run-demo
 
 ## Run log
 - T1 ✅ 2026-10-19 — no test (scaffolding) · go build ./... exit 0 · git repo initialized (repo-local identity, global untouched)
 - T2 ✅ 2026-10-19 — red: compile error (undefined: run) · green: 1 attempt · 7 cases
+- T3 ✅ 2026-10-19 — no test (build wiring) · make build/vet/test/fmt/run-demo all pass · +1-line .gitignore for the built binary
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 0)
