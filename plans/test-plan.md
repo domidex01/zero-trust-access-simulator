@@ -1,199 +1,269 @@
-# Test plan — zero-trust-access-simulator (Phase 2 — Engine)
+# Test plan — zero-trust-access-simulator (Phase 3 — Policy pack)
 
-Test files:
-- `internal/engine/engine_test.go` — **package `engine_test`** (black-box; imports
-  `zt-sim/internal/engine` + `zt-sim/internal/model`), everything except `New`'s sort
-- `internal/engine/engine_internal_test.go` — **package `engine`** (white-box; `New`'s
-  sort is observable only through the unexported slice — precedent: `main_test.go` tests
-  unexported `run`)
+Test file:
+- `internal/policies/policies_test.go` — **package `policies_test`** (black-box; imports
+  `zt-sim/internal/engine` + `zt-sim/internal/model`). No white-box file: matchers are
+  observable through the exported `Pack()`, so no `main_test.go`-style exception applies.
 
-Names follow `TestFunc_Scenario`.
+Names follow `TestFunc_Scenario`; subtests read as sentences in failure output.
 
 ## Code under test (pin these so execution needs no decisions)
 
 ```go
-// internal/engine/engine.go
-package engine // imports zt-sim/internal/model — pure: no I/O, no clock, no randomness
+// internal/policies/policies.go
+package policies // imports zt-sim/internal/{engine,model}; pure data + funcs, no I/O
 
-type Policy struct {
-	ID       string
-	Priority int // lower runs first; ties broken by ID ascending
-	Pillar   string // identity|devices|applications|data|networks|infrastructure
-	When     func(model.Signal) bool
-	Then     model.Action
-	Scope    string // populated when Then == Limited, e.g. "read-only"
-	Note     string // audit line; Reasons entries read "<ID>: <Note>"
-}
+// rankConfidential mirrors model.SensitivityRank("confidential") — the enum is
+// frozen, and the matcher must not discard the error return.
+const rankConfidential = 2
 
-type Engine struct{ /* unexported policies []Policy, pre-sorted */ }
-
-func New(policies []Policy) Engine // clone + sort by (Priority asc, ID asc); caller's slice untouched
-func (e Engine) Evaluate(s model.Signal) model.Decision // value receiver — Engine is immutable after New
+// Pack returns the eleven v1 policies; slice order is the §4 table order,
+// which is already (Priority asc, ID asc).
+func Pack() []engine.Policy
 ```
 
-Pinned engine reason strings (verbatim §3.5 — note the em dash):
+Matcher pins (§4 formula → exact Go predicate, `s` is the `model.Signal`):
 
-| Path | Exact reason |
-|---|---|
-| zero matches | `engine: no policy matched — fail closed (assume breach)` |
-| empty pack | `engine: no policies loaded — fail closed` |
+| ID | Pri | Pillar | `When` | Then | Scope |
+|---|---|---|---|---|---|
+| P01 | 10 | identity | `!s.MFAPresent` | StepUpMFA | |
+| P02 | 20 | identity | `s.UnfamiliarLoc` | StepUpMFA | |
+| P03 | 20 | identity | `s.UnfamiliarLoc && !s.MFAPresent` | Block | |
+| P04 | 30 | devices | `!s.DeviceManaged` | Limited | `read-only` |
+| P05 | 30 | devices | `s.DeviceManaged && !s.DeviceCompliant` | Limited | `read-only` |
+| P06 | 40 | data | `r, err := model.SensitivityRank(s.DataSensitivity); err == nil && r >= rankConfidential && !s.DeviceCompliant` | Block | |
+| P07 | 50 | identity | `s.RiskScore > 70` | Block | |
+| P08 | 60 | identity | `s.RiskScore >= 40 && s.RiskScore <= 70` | StepUpMFA | |
+| P09 | 70 | identity | `s.LocalHour < 5 && s.Role == "intern"` | StepUpMFA | |
+| P10 | 80 | applications | `s.Role != "finance" && s.App == "payroll-app"` | Block | |
+| P11 | 90 | identity | loop over P01–P10, below | Allow | |
 
-Semantics pins (§3):
-1. Sort `(Priority asc, ID asc)` at construction; Reasons/Matched/Pillars follow that order.
-2. Every policy evaluated, no short-circuit — one Reasons entry per matched policy.
-3. Final action = numeric max among matched actions (severity is the iota order).
-   Scope = first matching Limited policy's Scope when final action is Limited, else "".
-4. Pillars = unique pillars of matched policies, evaluation order.
-5. Fail closed — never a silent Allow (see reason strings above).
-
-## Shared fixtures (black-box file)
-
-`base()` — the alice note-scenario signal (§6), defined in T2.2, reused by T2.3/T2.4:
+P11 shape (tail of `Pack` — T3.2):
 
 ```go
-func base() model.Signal {
+core := []engine.Policy{ /* P01–P10 literals from the table above */ }
+catch := engine.Policy{
+	ID: "P11", Priority: 90, Pillar: "identity", Then: model.Allow,
+	Note: "all signals clean — explicit allow",
+	When: func(s model.Signal) bool {
+		for _, p := range core {
+			if p.When(s) {
+				return false
+			}
+		}
+		return true
+	},
+}
+return append(core, catch)
+```
+
+Notes verbatim from §4 (em dashes are part of the audit-line contract; `**and**` in the
+spec table is markdown bold → plain `and`):
+
+| ID | Note |
+|---|---|
+| P01 | `no second factor presented — verify explicitly` |
+| P02 | `unfamiliar sign-in location — re-verify` |
+| P03 | `unfamiliar location and no MFA — assume breach` |
+| P04 | `unmanaged device — least-privilege grant` |
+| P05 | `enrolled but non-compliant device — least-privilege grant` |
+| P06 | `confidential/high data on non-compliant device` |
+| P07 | `risk score above hard threshold` |
+| P08 | `elevated risk — verify explicitly` |
+| P09 | `odd-hours intern activity` |
+| P10 | `app outside requester's role — least privilege` |
+| P11 | `all signals clean — explicit allow` |
+
+## Shared fixtures (defined once, in T3.1's file)
+
+`clean()` — the §6 happy-path signal; **no P01–P10 matcher fires on it** (MFA on,
+familiar, managed + compliant, internal data, daytime, finance, non-payroll app, risk 15):
+
+```go
+func clean() model.Signal {
 	return model.Signal{
-		Timestamp:       time.Date(2026, 1, 15, 3, 14, 0, 0, time.UTC),
+		Timestamp:       time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC),
 		User:            "alice@contoso.com",
 		Role:            "finance",
-		App:             "payroll-app",
-		DataSensitivity: "high",
-		Location:        "BR",
-		UnfamiliarLoc:   true,
-		DeviceManaged:   false,
-		DeviceCompliant: false,
-		LocalHour:       3,
-		MFAPresent:      false,
-		RiskScore:       65,
+		App:             "intranet-wiki",
+		DataSensitivity: "internal",
+		Location:        "US",
+		UnfamiliarLoc:   false,
+		DeviceManaged:   true,
+		DeviceCompliant: true,
+		LocalHour:       10,
+		MFAPresent:      true,
+		RiskScore:       15,
 	}
 }
 ```
 
-`miniPack()` — synthetic fixture pack (added in T2.4; **not** the real P01–P11, which are
-Phase 3). Mirrors the pack's shape: one policy per §9 scenario shape, all four actions
-reachable, F01+F05 share the `identity` pillar so dedupe is exercised:
+`policyByID(t, id) engine.Policy` — `t.Helper()`; scans `policies.Pack()`, returns the
+policy with that ID, `t.Fatalf("policy %s not in pack", id)` otherwise (that Fatalf is
+T3.2's red).
 
-```go
-func miniPack() []engine.Policy {
-	return []engine.Policy{
-		{ID: "F01", Priority: 10, Pillar: "identity", When: func(s model.Signal) bool { return !s.MFAPresent }, Then: model.StepUpMFA, Note: "no second factor presented"},
-		{ID: "F02", Priority: 30, Pillar: "devices", When: func(s model.Signal) bool { return !s.DeviceManaged }, Then: model.Limited, Scope: "read-only", Note: "unmanaged device"},
-		{ID: "F03", Priority: 40, Pillar: "data", When: func(s model.Signal) bool { return s.RiskScore > 60 }, Then: model.Block, Note: "risk score above fixture threshold"},
-		{ID: "F04", Priority: 70, Pillar: "applications", When: func(s model.Signal) bool { return s.Role != "finance" && s.App == "payroll-app" }, Then: model.Block, Note: "app outside requester role"},
-		{ID: "F05", Priority: 99, Pillar: "identity", When: func(s model.Signal) bool { return true }, Then: model.Allow, Note: "all signals clean"},
-	}
-}
-```
+`triggers` — the shared mutation table used by both T3.1 and T3.2 (same slice, two
+readings). Mutations set **both** device fields together so the validation invariant
+`!DeviceManaged ⇒ !DeviceCompliant` always holds:
 
-## T2.1 — `New` sorts by (Priority, ID) and clones the input
-- Target: `internal/engine`, `TestNew_SortsByPriorityThenID`, `TestNew_ClonesCallerSlice`
-  (engine_internal_test.go, package `engine`)
-- Shape: table-driven (sort) + one case (clone)
-- Red because: `engine.New` undefined → compile error
-- Run: `go test ./internal/engine/ -run TestNew_ -count=1 -v`
+| id | mutation of `clean()` | also fires (expected, not asserted) |
+|---|---|---|
+| P01 | `s.MFAPresent = false` | — |
+| P02 | `s.UnfamiliarLoc = true` | — (P03 silent: MFA still on) |
+| P03 | `s.UnfamiliarLoc, s.MFAPresent = true, false` | P01, P02 |
+| P04 | `s.DeviceManaged, s.DeviceCompliant = false, false` | — (P06 silent: internal) |
+| P05 | `s.DeviceManaged, s.DeviceCompliant = true, false` | — |
+| P06 | `s.DeviceCompliant = false; s.DataSensitivity = "confidential"` | P05 |
+| P07 | `s.RiskScore = 71` | — (P08 silent: 71 > 70) |
+| P08 | `s.RiskScore = 70` | — (P07 silent: 70 not > 70) |
+| P09 | `s.Role, s.LocalHour = "intern", 4` | — |
+| P10 | `s.Role, s.App = "engineering", "payroll-app"` | — |
 
-TestNew_SortsByPriorityThenID — table field `give` = (Priority, ID) pairs, `want` =
-expected `e.policies` ID sequence:
+## T3.1 — P01–P10 fire on trigger, silent on clean
+- Target: `internal/policies`, `TestPack_FireSilence` (package `policies_test`)
+- Shape: table-driven over `triggers` — two assertions per row:
+  `policyByID(t, tc.id).When(tc.mutate(clean()))` is true, and
+  `policyByID(t, tc.id).When(clean())` is false
+- Red because: importing the empty `internal/policies` package fails the build
+  (`no Go files in …/internal/policies` — `Pack` undefined)
+- Run: `go test ./internal/policies/ -run TestPack_FireSilence -count=1 -v`
 
 | name | give | want |
 |---|---|---|
-| priority ascending | (30,C),(10,A),(20,B) | `A,B,C` |
-| tie broken by ascending ID | (10,B),(10,A),(10,C) | `A,B,C` |
-| mixed priorities and ties | (30,C),(10,B),(10,A),(20,D) | `A,B,D,C` |
+| P01 no second factor | triggers.P01 on clean | P01.When true; on clean false |
+| P02 unfamiliar location | triggers.P02 | P02.When true; clean false |
+| P03 unfamiliar and no MFA | triggers.P03 | P03.When true; clean false |
+| P04 unmanaged device | triggers.P04 | P04.When true; clean false |
+| P05 enrolled not compliant | triggers.P05 | P05.When true; clean false |
+| P06 confidential on non-compliant | triggers.P06 | P06.When true; clean false |
+| P07 risk above threshold | triggers.P07 | P07.When true; clean false |
+| P08 elevated risk | triggers.P08 | P08.When true; clean false |
+| P09 odd-hours intern | triggers.P09 | P09.When true; clean false |
+| P10 app outside role | triggers.P10 | P10.When true; clean false |
 
-TestNew_ClonesCallerSlice:
-
-| name | give | want |
-|---|---|---|
-| caller slice untouched | caller slice `[(30,C),(10,A)]`, call `New` | caller slice still `[(30,C),(10,A)]` — New sorted a copy (no side effects) |
-
-## T2.2 — `Evaluate` core semantics
-- Target: `internal/engine`, `TestEvaluate_Semantics` (engine_test.go, package `engine_test`)
-- Shape: table-driven; each row builds an inline pack + uses `base()` (field deltas per row)
-- Red because: `Engine.Evaluate` undefined → compile error
-- Run: `go test ./internal/engine/ -run TestEvaluate_Semantics -count=1 -v`
-
-| name | give (pack: ID/prio/Then/Note, all `When: true` unless noted) | want Decision |
-|---|---|---|
-| single match allows with one reason | F99/99/Allow/"all signals clean" | Allow, Scope "", Reasons `["F99: all signals clean"]`, Pillars `["identity"]`, Matched `["F99"]` |
-| strictest match wins across actions | F10/StepUp/"no second factor", F20/Limited(read-only)/"unmanaged device", F30/Block/"risk too high" | Block, Scope "", Reasons in order `F10,F20,F30`, Pillars `["identity","devices","data"]`, Matched `["F10","F20","F30"]` |
-| reasons follow priority order, not input order | same three policies handed to `New` as F30,F10,F20 | Reasons `F10,F20,F30` (sort normalizes input) |
-| priority tie breaks by ascending ID | FA/10/StepUp/"a note", FB/10/Allow/"b note" | StepUpMFA, Reasons `["FA: a note","FB: b note"]` |
-| scope from first matching limited policy | F20/Limited("read-only")/"limited one", F25/Limited("time-boxed")/"limited two", F99/Allow/"clean" | Limited, Scope `"read-only"`, Reasons `["F20: limited one","F25: limited two","F99: clean"]` |
-| curveball: same pillar listed once | F10/identity/StepUp, `When: !MFAPresent`/"no mfa" + F99/identity/Allow/"clean", signal = base() | StepUpMFA, Pillars `["identity"]` exactly once, Reasons `["F10: no mfa","F99: clean"]` |
-
-Give each row's policies distinct pillars unless the row says otherwise (pillar text is
-free-form in the engine; the pack-level enum check is Phase 3's sanity test).
-
-## T2.3 — Fail-closed paths
-- Target: `internal/engine`, `TestEvaluate_FailClosed` (engine_test.go)
-- Shape: table-driven
-- Red because: behavioral — T2.2's zero-match path returns the zero-value Decision
-  (`Allow`), so the first row fails on Action
-- Run: `go test ./internal/engine/ -run TestEvaluate_FailClosed -count=1 -v`
+## T3.2 — P11 catch-all is exclusive
+- Target: `internal/policies`, `TestPack_CatchAllExclusive` (same file/package)
+- Shape: two parts — (a) `policyByID(t, "P11").When(clean())` is true;
+  (b) table over the same `triggers`: `policyByID(t, "P11").When(tc.mutate(clean()))`
+  is false for **every** row. §4: "matches iff no P01–P10 matched" — the table reading
+  proves the iff-direction that matters (P11 must not co-sign a finding)
+- Red because: behavioral — `Pack()` still returns only ten policies, so
+  `policyByID(t, "P11")` Fatalfs (`policy P11 not in pack`)
+- Run: `go test ./internal/policies/ -run TestPack_CatchAllExclusive -count=1 -v`
 
 | name | give | want |
 |---|---|---|
-| no policy matched | pack = one policy with `When: s.MFAPresent` (false for base()) | Block, Scope "", Reasons `["engine: no policy matched — fail closed (assume breach)"]`, len(Pillars)==0, len(Matched)==0 |
-| empty pack via New(nil) | `engine.New(nil)`, base() | Block, Reasons `["engine: no policies loaded — fail closed"]`, len(Pillars)==0, len(Matched)==0 |
-| zero-value engine | `var e engine.Engine`, base() | same as empty pack |
+| clean signal | `clean()` | P11.When true |
+| P01's trigger | triggers.P01 on clean | P11.When false |
+| … | …(one subtest per `triggers` row, ids P01–P10)… | P11.When false |
 
-Assert `len(Pillars)==0` / `len(Matched)==0`, not nil-vs-empty — Phase 1 already decided
-nil-slice normalization is not observable in v1.
+## T3.3 — Sweep: boundaries + §6 scenario shapes
+- Target: `internal/policies`, `TestPack_Boundaries` + `TestPack_ScenarioShapes`
+- Shape: `TestPack_Boundaries` — rows of (name, mutation, `checks map[string]bool`);
+  for each `id, want` in checks: `policyByID(t, id).When(sig) == want`. Only the listed
+  ids are asserted (multi-fire is normal — exact match sets are the scenario test's job).
+  `TestPack_ScenarioShapes` — rows of (name, overrides on `clean()`, want Decision);
+  `d := engine.New(policies.Pack()).Evaluate(sig)`; assert `d.Action`, `d.Scope`,
+  `d.Matched`, `d.Pillars` as exact slices. Reasons are pinned structurally by T3.4's
+  Note table + T2.2's `"<ID>: <Note>"` format — not re-asserted here
+- Red because: nothing — gap-closing sweep (T1.5/T2.4 precedent); 0 red expected, a red
+  is a real pack bug → fix the pack, not the test
+- Run: `go test ./internal/policies/ -run 'TestPack_Boundaries|TestPack_ScenarioShapes' -count=1 -v`
 
-## T2.4 — Scenario table + the four §9 properties
-- Target: `internal/engine`, `TestEvaluate_ScenarioShapes`, `TestEvaluate_StrictestWins`,
-  `TestEvaluate_NoSilentPass`, `TestEvaluate_Deterministic` (engine_test.go)
-- Shape: one big table (scenario shapes) + three property tests
-- Red because: nothing — gap-closing sweep (T1.5 precedent); a red test here is an engine
-  bug: fix the engine, not the test
-- Run: `go test ./internal/engine/ -count=1 -v`
+### Boundaries table
 
-### TestEvaluate_ScenarioShapes — `miniPack()`, signal = base() + deltas, full Decisions pinned
-
-| name | delta from base() | want |
+| name | mutation on clean() | checks (id → When) |
 |---|---|---|
-| note scenario | — | Block, Scope "", Reasons `["F01: no second factor presented","F02: unmanaged device","F03: risk score above fixture threshold","F05: all signals clean"]`, Pillars `["identity","devices","data"]`, Matched `["F01","F02","F03","F05"]` |
-| happy | MFAPresent=true, UnfamiliarLoc=false, DeviceManaged=true, DeviceCompliant=true, RiskScore=15, DataSensitivity="internal", Location="US" | Allow, Reasons `["F05: all signals clean"]`, Pillars `["identity"]`, Matched `["F05"]` |
-| stolen credential | UnfamiliarLoc=false, DeviceManaged=true, DeviceCompliant=true, RiskScore=45, DataSensitivity="internal", Location="US" (MFA stays false) | StepUpMFA, Reasons `["F01: no second factor presented","F05: all signals clean"]`, Pillars `["identity"]` (deduped), Matched `["F01","F05"]` |
-| byod | MFAPresent=true, UnfamiliarLoc=false, RiskScore=15, DataSensitivity="internal", Location="US" (device stays unmanaged) | Limited, Scope `"read-only"`, Reasons `["F02: unmanaged device","F05: all signals clean"]`, Pillars `["devices","identity"]`, Matched `["F02","F05"]` |
-| insider | happy delta + Role="engineering", RiskScore=10 | Block, Reasons `["F04: app outside requester role","F05: all signals clean"]`, Pillars `["applications","identity"]`, Matched `["F04","F05"]` |
+| risk 70 still elevated | `RiskScore = 70` | P07:false, P08:true |
+| risk 71 is hard threshold | `RiskScore = 71` | P07:true, P08:false |
+| risk 40 enters elevated | `RiskScore = 40` | P07:false, P08:true |
+| risk 39 below elevated | `RiskScore = 39` | P07:false, P08:false |
+| intern at 04:59 fires | `Role="intern"; LocalHour = 4` | P09:true |
+| intern at 05:00 silent (half-open) | `Role="intern"; LocalHour = 5` | P09:false |
+| intern at 00:00 fires | `Role="intern"; LocalHour = 0` | P09:true |
+| finance at 03:00 silent (role guard) | `LocalHour = 3` | P09:false |
+| confidential on non-compliant | `DataSensitivity="confidential"; DeviceCompliant=false` | P06:true |
+| high on non-compliant | `DataSensitivity="high"; DeviceCompliant=false` | P06:true |
+| internal on non-compliant | `DeviceCompliant=false` | P06:false |
+| confidential on compliant (device guard) | `DataSensitivity="confidential"` | P06:false |
+| unmanaged device | `DeviceManaged, DeviceCompliant = false, false` | P04:true, P05:false |
+| enrolled not compliant | `DeviceCompliant=false` | P04:false, P05:true |
+| fully healthy device | — | P04:false, P05:false |
+| unfamiliar with MFA (P02 not dead weight) | `UnfamiliarLoc = true` | P02:true, P03:false |
+| familiar without MFA (P03 && guard) | `MFAPresent = false` | P03:false |
+| finance on payroll-app (role guard) | `App = "payroll-app"` | P10:false |
 
-Every action is exercised by ≥ 1 row; every non-happy row also proves strictest-wins
-against the always-matching F05 Allow.
+(The 4th device state — unmanaged **and** compliant — violates the §2 validation
+invariant and is unreachable post-`DecodeSignal`; no row.)
 
-### TestEvaluate_StrictestWins — one always-true policy per listed action, distinct pillars
+### Scenario shapes table (§6, overrides on `clean()`; Timestamp untouched)
 
-| name | actions in pack | want action | want scope |
-|---|---|---|---|
-| allow alone | [Allow] | Allow | "" |
-| limited beats allow | [Allow, Limited] | Limited | "read-only" |
-| step-up beats allow and limited | [Allow, Limited, StepUpMFA] | StepUpMFA | "" |
-| block beats everything | [Allow, Limited, StepUpMFA, Block] | Block | "" |
-| step-up beats limited | [Limited, StepUpMFA] | StepUpMFA | "" |
-| block beats step-up | [StepUpMFA, Block] | Block | "" |
+| name | overrides | want action | want matched | want scope | want pillars |
+|---|---|---|---|---|---|
+| happy | — | allow | P11 | "" | identity |
+| noteScenario | `App="payroll-app"; DataSensitivity="high"; Location="BR"; UnfamiliarLoc=true; DeviceManaged=false; DeviceCompliant=false; LocalHour=3; MFAPresent=false; RiskScore=65` | block | P01,P02,P03,P04,P06,P08 | "" | identity,devices,data |
+| stolenCred | `MFAPresent=false; DeviceManaged=false; DeviceCompliant=false; RiskScore=45` | stepUpMFA | P01,P04,P08 | "" | identity,devices |
+| insider | `User="bob@contoso.com"; Role="engineering"; App="payroll-app"` | block | P10 | "" | applications |
+| byod | `DeviceManaged=false; DeviceCompliant=false` | limited | P04 | read-only | devices |
+| attacker | `User="unknown@throwaway.example"; Role="guest"; App="payroll-app"; DataSensitivity="high"; Location="NG"; UnfamiliarLoc=true; DeviceManaged=false; DeviceCompliant=false; LocalHour=2; MFAPresent=false; RiskScore=85` | block | P01,P02,P03,P04,P06,P07,P10 | "" | identity,devices,data,applications |
 
-### TestEvaluate_NoSilentPass — loops over the five scenario rows + the three fail-closed cases
-- every decision: `len(Reasons) >= 1`
-- when `len(Matched) > 0`: `len(Reasons) == len(Matched)` (one reason per matched policy, §3.2)
-- `Action == Allow` ⇒ `len(Matched) >= 1` (an Allow always cites its allow policy)
-- fail-closed: exactly 1 reason starting with `engine:`
+Hand-derivation (verified against §6 while planning): noteScenario — P09 silent (finance
+not intern), P07 silent (65 ≤ 70), P10 silent (finance); attacker — P08 silent (85 > 70),
+P09 silent (guest); stolenCred/byod keep sensitivity internal so P06 stays silent.
 
-### TestEvaluate_Deterministic
-- double eval: for each scenario row, `d1, d2 := e.Evaluate(s), e.Evaluate(s)` →
-  `reflect.DeepEqual(d1, d2)` (§9 property 4)
-- construction order irrelevant: `New(miniPack())` vs `New(reversed miniPack())` →
-  identical Decision for the same signal (New's sort normalizes input order)
+## T3.4 — Sweep: pack sanity, §4 metadata verbatim
+- Target: `internal/policies`, `TestPack_Metadata` (same file/package)
+- Shape: iterate `policies.Pack()` positionally against the pinned table below — fields
+  compared individually (`Policy` has a func field, so no `==`; `When` is tested
+  behaviorally in T3.1–T3.3). Then the structural assertions:
+  `len(Pack()) == 11` (= table length); IDs unique; exactly one policy with
+  `Then == model.Allow` and its ID is `"P11"`; `Scope == "read-only"` iff
+  `Then == model.Limited`, else `Scope == ""`; every Pillar ∈ {identity, devices,
+  applications, data, networks, infrastructure}. Priorities are **not** asserted unique —
+  P02/P03 share 20 and P04/P05 share 30 by design; the table match pins them instead
+- Red because: nothing — transcription sweep; a red means the pack (or, if the table was
+  mistranscribed from §4, both) gets fixed, noted in the run log
+- Run: `go test ./internal/policies/ -run TestPack_Metadata -count=1 -v`
 
-### §9 audit mapping (every bullet + property → named test)
+Pinned metadata table (= §4 verbatim, Notes as in the table above):
+
+| # | ID | Priority | Pillar | Then | Scope |
+|---|---|---|---|---|---|
+| 0 | P01 | 10 | identity | StepUpMFA | "" |
+| 1 | P02 | 20 | identity | StepUpMFA | "" |
+| 2 | P03 | 20 | identity | Block | "" |
+| 3 | P04 | 30 | devices | Limited | read-only |
+| 4 | P05 | 30 | devices | Limited | read-only |
+| 5 | P06 | 40 | data | Block | "" |
+| 6 | P07 | 50 | identity | Block | "" |
+| 7 | P08 | 60 | identity | StepUpMFA | "" |
+| 8 | P09 | 70 | identity | StepUpMFA | "" |
+| 9 | P10 | 80 | applications | Block | "" |
+| 10 | P11 | 90 | identity | Allow | "" |
+
+### §9 audit mapping (policies bullets → named tests)
 
 | §9 requirement | Covered by |
 |---|---|
-| scenario table (noteScenario→Block, happy→Allow, stolenCred→StepUpMFA, byod→Limited, insider→Block) | `TestEvaluate_ScenarioShapes` |
-| property 1 — fail closed (zero matches / empty pack → Block, never Allow) | `TestEvaluate_FailClosed` (T2.3) |
-| property 2 — strictest wins | `TestEvaluate_StrictestWins` + every multi-match scenario row |
-| property 3 — no silent passes (≥ 1 reason, incl. the Allow all-clear) | `TestEvaluate_NoSilentPass` |
-| property 4 — determinism (same input → same output/order, two Evaluate calls) | `TestEvaluate_Deterministic` + `TestEvaluate_Semantics` order/tie rows |
+| each P01–P11 fires on its trigger signal and stays silent on a clean one | `TestPack_FireSilence` + `TestPack_CatchAllExclusive` |
+| boundary tests (risk 70/71, localHour 4/5, sensitivity confidential vs internal) | `TestPack_Boundaries` |
+| unique IDs, priorities match §4, catch-all present exactly once, pillar values valid | `TestPack_Metadata` |
+| every §6 scenario row derives from the pack | `TestPack_ScenarioShapes` |
+
+---
+
+# Phase 2 — Engine (complete, archived)
+
+Test files: `internal/engine/engine_test.go` (black-box, package `engine_test`),
+`internal/engine/engine_internal_test.go` (white-box sort). Key pins still in force:
+`New` clones + sorts by (Priority, ID); `Evaluate` evaluates all, numeric-max severity,
+first-Limited scope kept only when Limited wins, fail-closed reasons verbatim
+(`engine: no policy matched — fail closed (assume breach)` /
+`engine: no policies loaded — fail closed`). Named tests: `TestNew_Sort`,
+`TestNew_DoesNotMutateCallerSlice`, `TestEvaluate_Semantics`, `TestEvaluate_FailClosed`,
+`TestEvaluate_ScenarioShapes` (miniPack), `TestEvaluate_StrictestWins`,
+`TestEvaluate_NoSilentPass`, `TestEvaluate_Deterministic`. Full case tables: git
+history / `plans/pr-phase2.md`.
 
 ---
 
