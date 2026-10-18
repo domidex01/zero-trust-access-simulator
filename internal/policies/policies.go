@@ -11,10 +11,10 @@ import (
 // is frozen, and the matcher must not discard the error return.
 const rankConfidential = 2
 
-// Pack returns the v1 policies; slice order is the §4 table order, which
-// is already (Priority asc, ID asc).
+// Pack returns the eleven v1 policies; slice order is the §4 table order,
+// which is already (Priority asc, ID asc).
 func Pack() []engine.Policy {
-	return []engine.Policy{
+	core := []engine.Policy{
 		{
 			ID: "P01", Priority: 10, Pillar: "identity", Then: model.StepUpMFA,
 			Note: "no second factor presented — verify explicitly",
@@ -69,4 +69,19 @@ func Pack() []engine.Policy {
 			When: func(s model.Signal) bool { return s.Role != "finance" && s.App == "payroll-app" },
 		},
 	}
+	// P11 matches iff no P01–P10 matched, so Matched/Reasons never carry a
+	// false "all clear" alongside a real finding.
+	catch := engine.Policy{
+		ID: "P11", Priority: 90, Pillar: "identity", Then: model.Allow,
+		Note: "all signals clean — explicit allow",
+		When: func(s model.Signal) bool {
+			for _, p := range core {
+				if p.When(s) {
+					return false
+				}
+			}
+			return true
+		},
+	}
+	return append(core, catch)
 }

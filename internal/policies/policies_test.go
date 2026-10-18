@@ -61,6 +61,21 @@ var triggers = []struct {
 	{"P10", func(s model.Signal) model.Signal { s.Role, s.App = "engineering", "payroll-app"; return s }},
 }
 
+func TestPack_CatchAllExclusive(t *testing.T) {
+	t.Run("clean signal allows", func(t *testing.T) {
+		if !policyByID(t, "P11").When(clean()) {
+			t.Error("P11.When(clean) = false, want true")
+		}
+	})
+	for _, tc := range triggers {
+		t.Run(tc.id+"'s trigger blocks the catch-all", func(t *testing.T) {
+			if policyByID(t, "P11").When(tc.mutate(clean())) {
+				t.Errorf("P11.When(%s trigger) = true, want false", tc.id)
+			}
+		})
+	}
+}
+
 func TestPack_FireSilence(t *testing.T) {
 	for _, tc := range triggers {
 		t.Run(tc.id+" fires on trigger, silent on clean", func(t *testing.T) {
