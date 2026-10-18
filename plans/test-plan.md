@@ -125,7 +125,7 @@ TestSignal_Validate — base signal is the T1.1 alice golden (valid), one delta 
 | name | delta from base | want error contains |
 |---|---|---|
 | happy path | — | `nil` |
-| limits accepted | riskScore 0→100 sweep: RiskScore 100, LocalHour 0 and 23, Location "" | `nil` (one row, all bounds at once) |
+| limits accepted | split into two rows — `lower limits` (RiskScore 0, LocalHour 0, Location "") and `upper limits` (RiskScore 100, LocalHour 23), both `nil`. *Split because LocalHour can't be 0 and 23 in one struct; coverage identical* |
 | empty user | `User: ""` | `user must not be empty` |
 | empty role | `Role: ""` | `role must not be empty` |
 | empty app | `App: ""` | `app must not be empty` |
