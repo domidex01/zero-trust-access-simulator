@@ -2,7 +2,10 @@
 // the four Actions, and the resulting Decision.
 package model
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Signal is one access request — the "verify explicitly" input.
 type Signal struct {
@@ -18,4 +21,22 @@ type Signal struct {
 	LocalHour       int       `json:"localHour"`       // 0–23, user's local wall-clock hour
 	MFAPresent      bool      `json:"mfaPresent"`      // a second factor was already used
 	RiskScore       int       `json:"riskScore"`       // 0–100, composite heuristic
+}
+
+var sensitivityRanks = map[string]int{
+	"public":       0,
+	"internal":     1,
+	"confidential": 2,
+	"high":         3,
+}
+
+// SensitivityRank maps a dataSensitivity value to its place in the total
+// order public < internal < confidential < high ("high" ≙ highly confidential).
+// Matching is case-sensitive; unknown values are an error.
+func SensitivityRank(s string) (int, error) {
+	rank, ok := sensitivityRanks[s]
+	if !ok {
+		return 0, fmt.Errorf("dataSensitivity %q not one of public|internal|confidential|high", s)
+	}
+	return rank, nil
 }

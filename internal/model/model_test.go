@@ -204,3 +204,49 @@ func TestAction_SeverityOrder(t *testing.T) {
 		t.Errorf("severity order broken: want Allow < Limited < StepUpMFA < Block")
 	}
 }
+
+func TestSensitivityRank(t *testing.T) {
+	tests := []struct {
+		name    string
+		give    string
+		want    int
+		wantErr string
+	}{
+		{name: "public", give: "public", want: 0},
+		{name: "internal", give: "internal", want: 1},
+		{name: "confidential", give: "confidential", want: 2},
+		{name: "high", give: "high", want: 3},
+		{name: "unknown value", give: "ultra", wantErr: `dataSensitivity "ultra"`},
+		{name: "wrong case", give: "Public", wantErr: "dataSensitivity"},
+		{name: "empty", give: "", wantErr: "dataSensitivity"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := model.SensitivityRank(tc.give)
+			switch {
+			case tc.wantErr != "":
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Errorf("err = %v, want containing %q", err, tc.wantErr)
+				}
+			case err != nil:
+				t.Errorf("unexpected error: %v", err)
+			case got != tc.want:
+				t.Errorf("rank = %d, want %d", got, tc.want)
+			}
+		})
+	}
+
+	// total order holds: public < internal < confidential < high
+	ranks := []string{"public", "internal", "confidential", "high"}
+	prev := -1
+	for _, s := range ranks {
+		r, err := model.SensitivityRank(s)
+		if err != nil {
+			t.Fatalf("rank(%q): %v", s, err)
+		}
+		if r <= prev {
+			t.Errorf("total order broken: rank(%q) = %d, not > %d", s, r, prev)
+		}
+		prev = r
+	}
+}

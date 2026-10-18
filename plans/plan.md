@@ -9,7 +9,7 @@
 Phase 1:
 - [x] T1.1 `Signal` + `Decision` structs, exact §2 JSON tags (incl. bare `Action` type)
 - [x] T1.2 `Action` behavior: `String()`, text marshalling, severity order
-- [ ] T1.3 `SensitivityRank(string) (int, error)`
+- [x] T1.3 `SensitivityRank(string) (int, error)`
 - [ ] T1.4 `Signal.Validate()` (every §2 rule) + strict decoder helper
 - [ ] T1.5 Test completeness sweep against the §9 model-suite list
 
@@ -21,6 +21,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T3 ✅ 2026-10-19 — no test (build wiring) · make build/vet/test/fmt/run-demo all pass · +1-line .gitignore for the built binary
 - T1.1 ✅ 2026-10-20 — red: compile error (model.Signal undefined) · green: 1 attempt · 2 cases
 - T1.2 ✅ 2026-10-20 — red: compile error (Action.String undefined) · green: 1 attempt · 10 cases · test-plan fix: out-of-range MarshalText row now asserts an error (was vacuous)
+- T1.3 ✅ 2026-10-20 — red: compile error (model.SensitivityRank undefined) · green: 1 attempt · 8 cases
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 1)
