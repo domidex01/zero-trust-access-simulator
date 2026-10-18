@@ -365,40 +365,40 @@ Work top-to-bottom; each phase builds on the previous one. Commit per task.
 ### Phase 0 — Scaffold
 > Goal: a building, vet-clean skeleton.
 
-- [ ] **T0.1** `go mod init zt-sim`; create `internal/{model,engine,policies,scenario,report}` and `scenarios/`
-- [ ] **T0.2** `main.go`: subcommand dispatch (`decide|run|policies|audit`), `--version`, usage errors → exit 64; unknown subcommand → exit 64
-- [ ] **T0.3** `Makefile`: `build`, `test`, `fmt`, `vet`, `run-demo`
+- [x] **T0.1** `go mod init zt-sim`; create `internal/{model,engine,policies,scenario,report}` and `scenarios/`
+- [x] **T0.2** `main.go`: subcommand dispatch (`decide|run|policies|audit`), `--version`, usage errors → exit 64; unknown subcommand → exit 64
+- [x] **T0.3** `Makefile`: `build`, `test`, `fmt`, `vet`, `run-demo`
 
 **Done when**: `go build ./...` and `go vet ./...` pass; `./zt-sim --version` prints.
 
 ### Phase 1 — Domain model
 > Goal: `internal/model` complete and tested.
 
-- [ ] **T1.1** `Signal`, `Decision` structs with the exact JSON tags from §2
-- [ ] **T1.2** `Action` enum: `String()`, `MarshalText()`/`UnmarshalText()`, severity constants
-- [ ] **T1.3** `SensitivityRank(string) int` (`public=0 < internal=1 < confidential=2 < high=3`), error on unknown
-- [ ] **T1.4** `Signal.Validate()` implementing every §2 rule; strict decoder helper (`DisallowUnknownFields`)
-- [ ] **T1.5** `model_test.go`: round-trip, marshalling, all validation rules
+- [x] **T1.1** `Signal`, `Decision` structs with the exact JSON tags from §2
+- [x] **T1.2** `Action` enum: `String()`, `MarshalText()`/`UnmarshalText()`, severity constants
+- [x] **T1.3** `SensitivityRank(string) int` (`public=0 < internal=1 < confidential=2 < high=3`), error on unknown
+- [x] **T1.4** `Signal.Validate()` implementing every §2 rule; strict decoder helper (`DisallowUnknownFields`)
+- [x] **T1.5** `model_test.go`: round-trip, marshalling, all validation rules
 
 **Done when**: `go test ./internal/model/` green.
 
 ### Phase 2 — Engine
 > Goal: pure evaluator with the §3 semantics.
 
-- [ ] **T2.1** `Policy` struct; `Engine` holds policies pre-sorted by `(Priority, ID)`
-- [ ] **T2.2** `Evaluate(Signal) Decision`: evaluate all, strictest-wins, scope from the strictest Limited match, reason format `"<ID>: <Note>"`
-- [ ] **T2.3** Fail-closed paths: zero matches and empty pack → `Block` with engine reason
-- [ ] **T2.4** `engine_test.go`: scenario table + the four global properties (§9), incl. double-eval determinism
+- [x] **T2.1** `Policy` struct; `Engine` holds policies pre-sorted by `(Priority, ID)`
+- [x] **T2.2** `Evaluate(Signal) Decision`: evaluate all, strictest-wins, scope from the strictest Limited match, reason format `"<ID>: <Note>"`
+- [x] **T2.3** Fail-closed paths: zero matches and empty pack → `Block` with engine reason
+- [x] **T2.4** `engine_test.go`: scenario table + the four global properties (§9), incl. double-eval determinism
 
 **Done when**: `go test ./internal/engine/` green with property tests.
 
 ### Phase 3 — Policy pack
 > Goal: P01–P11 exactly as §4.
 
-- [ ] **T3.1** Implement P01–P10 matchers; each `Note` copied verbatim from §4 (audit lines)
-- [ ] **T3.2** P11 catch-all: matches iff no other pack policy matched
-- [ ] **T3.3** `policies_test.go`: per-policy fire/silence tests; boundary tests (risk 70/71, `localHour` 4/5, sensitivity confidential vs internal)
-- [ ] **T3.4** Pack sanity test: IDs unique & ordered as table, catch-all present once, pillar values valid
+- [x] **T3.1** Implement P01–P10 matchers; each `Note` copied verbatim from §4 (audit lines)
+- [x] **T3.2** P11 catch-all: matches iff no other pack policy matched
+- [x] **T3.3** `policies_test.go`: per-policy fire/silence tests; boundary tests (risk 70/71, `localHour` 4/5, sensitivity confidential vs internal)
+- [x] **T3.4** Pack sanity test: IDs unique & ordered as table, catch-all present once, pillar values valid
 
 **Done when**: `go test ./internal/policies/` green; every scenario row in §6 can be derived by hand from the pack.
 
