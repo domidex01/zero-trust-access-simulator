@@ -5,7 +5,6 @@ package engine
 import (
 	"cmp"
 	"slices"
-	"strings"
 
 	"zt-sim/internal/model"
 )
@@ -33,10 +32,7 @@ type Engine struct {
 func New(policies []Policy) Engine {
 	sorted := slices.Clone(policies)
 	slices.SortFunc(sorted, func(a, b Policy) int {
-		if c := cmp.Compare(a.Priority, b.Priority); c != 0 {
-			return c
-		}
-		return strings.Compare(a.ID, b.ID)
+		return cmp.Or(cmp.Compare(a.Priority, b.Priority), cmp.Compare(a.ID, b.ID))
 	})
 	return Engine{policies: sorted}
 }
@@ -69,9 +65,7 @@ func (e Engine) Evaluate(s model.Signal) model.Decision {
 		if !slices.Contains(d.Pillars, p.Pillar) {
 			d.Pillars = append(d.Pillars, p.Pillar)
 		}
-		if p.Then > d.Action {
-			d.Action = p.Then
-		}
+		d.Action = max(d.Action, p.Then)
 		if p.Then == model.Limited && !limitedSeen {
 			limitedSeen = true
 			firstLimited = p.Scope

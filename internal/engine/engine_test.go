@@ -139,8 +139,15 @@ func TestEvaluate_Semantics(t *testing.T) {
 	}
 }
 
-func TestEvaluate_FailClosed(t *testing.T) {
-	tests := []struct {
+// failClosedCases: the three §3.5 paths as named engines with their pinned
+// decisions. FailClosed asserts the full want; NoSilentPass re-loops them
+// for the property check.
+func failClosedCases() []struct {
+	name string
+	eng  engine.Engine
+	want model.Decision
+} {
+	return []struct {
 		name string
 		eng  engine.Engine
 		want model.Decision
@@ -172,8 +179,10 @@ func TestEvaluate_FailClosed(t *testing.T) {
 			},
 		},
 	}
+}
 
-	for _, tc := range tests {
+func TestEvaluate_FailClosed(t *testing.T) {
+	for _, tc := range failClosedCases() {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tc.eng.Evaluate(base())
 			if got.Action != tc.want.Action {
@@ -353,17 +362,6 @@ func TestEvaluate_StrictestWins(t *testing.T) {
 	}
 }
 
-// failClosedEngines: the three §3.5 paths as ready engines.
-func failClosedEngines() []engine.Engine {
-	return []engine.Engine{
-		engine.New([]engine.Policy{
-			{ID: "F01", Priority: 10, Pillar: "identity", When: func(s model.Signal) bool { return s.MFAPresent }, Then: model.Allow, Note: "has second factor"},
-		}),
-		engine.New(nil),
-		engine.Engine{},
-	}
-}
-
 func TestEvaluate_NoSilentPass(t *testing.T) {
 	for _, tc := range scenarioShapes() {
 		t.Run(tc.name, func(t *testing.T) {
@@ -380,10 +378,9 @@ func TestEvaluate_NoSilentPass(t *testing.T) {
 		})
 	}
 
-	names := []string{"no policy matched", "empty pack via New(nil)", "zero-value engine"}
-	for i, e := range failClosedEngines() {
-		t.Run(names[i], func(t *testing.T) {
-			d := e.Evaluate(base())
+	for _, tc := range failClosedCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			d := tc.eng.Evaluate(base())
 			if len(d.Reasons) != 1 || !strings.HasPrefix(d.Reasons[0], "engine:") {
 				t.Errorf("fail-closed decision must carry exactly one engine: reason, got %+v", d)
 			}
