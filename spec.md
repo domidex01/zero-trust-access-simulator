@@ -155,19 +155,19 @@ output, same reason order. That is what makes table-driven testing trivial.
 Policies live in code (`internal/policies`), not config — typed Go funcs beat hand-rolled
 config parsing at this size. Every matcher reads fields that actually exist on `Signal`.
 
-| ID | Priority | Pillar | When | Then | Note (audit line) |
-|----|----------|--------|------|------|--------------------|
-| P01 | 10 | identity | `!MFAPresent` | StepUpMFA | no second factor presented — verify explicitly |
-| P02 | 20 | identity | `UnfamiliarLoc` | StepUpMFA | unfamiliar sign-in location — re-verify |
-| P03 | 20 | identity | `UnfamiliarLoc && !MFAPresent` | Block | unfamiliar location **and** no MFA — assume breach |
-| P04 | 30 | devices | `!DeviceManaged` | Limited (read-only) | unmanaged device — least-privilege grant |
-| P05 | 30 | devices | `DeviceManaged && !DeviceCompliant` | Limited (read-only) | enrolled but non-compliant device — least-privilege grant |
-| P06 | 40 | data | `SensitivityRank ≥ confidential && !DeviceCompliant` | Block | confidential/high data on non-compliant device |
-| P07 | 50 | identity | `RiskScore > 70` | Block | risk score above hard threshold |
-| P08 | 60 | identity | `40 ≤ RiskScore ≤ 70` | StepUpMFA | elevated risk — verify explicitly |
-| P09 | 70 | identity | `LocalHour < 5 && Role == "intern"` | StepUpMFA | odd-hours intern activity |
-| P10 | 80 | applications | `Role != "finance" && App == "payroll-app"` | Block | app outside requester's role — least privilege |
-| P11 | 90 | identity | **catch-all**: no P01–P10 matched | Allow | all signals clean — explicit allow |
+| ID  | Priority | Pillar       | When                                                 | Then                | Note (audit line)                                         |
+| --- | -------- | ------------ | ---------------------------------------------------- | ------------------- | --------------------------------------------------------- |
+| P01 | 10       | identity     | `!MFAPresent`                                        | StepUpMFA           | no second factor presented — verify explicitly            |
+| P02 | 20       | identity     | `UnfamiliarLoc`                                      | StepUpMFA           | unfamiliar sign-in location — re-verify                   |
+| P03 | 20       | identity     | `UnfamiliarLoc && !MFAPresent`                       | Block               | unfamiliar location **and** no MFA — assume breach        |
+| P04 | 30       | devices      | `!DeviceManaged`                                     | Limited (read-only) | unmanaged device — least-privilege grant                  |
+| P05 | 30       | devices      | `DeviceManaged && !DeviceCompliant`                  | Limited (read-only) | enrolled but non-compliant device — least-privilege grant |
+| P06 | 40       | data         | `SensitivityRank ≥ confidential && !DeviceCompliant` | Block               | confidential/high data on non-compliant device            |
+| P07 | 50       | identity     | `RiskScore > 70`                                     | Block               | risk score above hard threshold                           |
+| P08 | 60       | identity     | `40 ≤ RiskScore ≤ 70`                                | StepUpMFA           | elevated risk — verify explicitly                         |
+| P09 | 70       | identity     | `LocalHour < 5 && Role == "intern"`                  | StepUpMFA           | odd-hours intern activity                                 |
+| P10 | 80       | applications | `Role != "finance" && App == "payroll-app"`          | Block               | app outside requester's role — least privilege            |
+| P11 | 90       | identity     | **catch-all**: no P01–P10 matched                    | Allow               | all signals clean — explicit allow                        |
 
 Notes on the pack:
 
