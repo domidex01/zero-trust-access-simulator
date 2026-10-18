@@ -211,3 +211,81 @@ func TestPack_ScenarioShapes(t *testing.T) {
 		})
 	}
 }
+
+func TestPack_Metadata(t *testing.T) {
+	// Pinned §4 table, positional; Notes verbatim (em dashes included).
+	// When is tested behaviorally in the other tests — Policy has a func
+	// field, so it isn't ==-comparable anyway.
+	want := []struct {
+		id       string
+		priority int
+		pillar   string
+		then     model.Action
+		scope    string
+		note     string
+	}{
+		{"P01", 10, "identity", model.StepUpMFA, "", "no second factor presented — verify explicitly"},
+		{"P02", 20, "identity", model.StepUpMFA, "", "unfamiliar sign-in location — re-verify"},
+		{"P03", 20, "identity", model.Block, "", "unfamiliar location and no MFA — assume breach"},
+		{"P04", 30, "devices", model.Limited, "read-only", "unmanaged device — least-privilege grant"},
+		{"P05", 30, "devices", model.Limited, "read-only", "enrolled but non-compliant device — least-privilege grant"},
+		{"P06", 40, "data", model.Block, "", "confidential/high data on non-compliant device"},
+		{"P07", 50, "identity", model.Block, "", "risk score above hard threshold"},
+		{"P08", 60, "identity", model.StepUpMFA, "", "elevated risk — verify explicitly"},
+		{"P09", 70, "identity", model.StepUpMFA, "", "odd-hours intern activity"},
+		{"P10", 80, "applications", model.Block, "", "app outside requester's role — least privilege"},
+		{"P11", 90, "identity", model.Allow, "", "all signals clean — explicit allow"},
+	}
+	pack := policies.Pack()
+	if len(pack) != len(want) {
+		t.Fatalf("len(Pack()) = %d, want %d", len(pack), len(want))
+	}
+	seen := map[string]bool{}
+	allowed := 0
+	for i, w := range want {
+		p := pack[i]
+		if p.ID != w.id {
+			t.Errorf("pack[%d].ID = %q, want %q", i, p.ID, w.id)
+		}
+		if p.Priority != w.priority {
+			t.Errorf("%s.Priority = %d, want %d", w.id, p.Priority, w.priority)
+		}
+		if p.Pillar != w.pillar {
+			t.Errorf("%s.Pillar = %q, want %q", w.id, p.Pillar, w.pillar)
+		}
+		if p.Then != w.then {
+			t.Errorf("%s.Then = %s, want %s", w.id, p.Then, w.then)
+		}
+		if p.Scope != w.scope {
+			t.Errorf("%s.Scope = %q, want %q", w.id, p.Scope, w.scope)
+		}
+		if p.Note != w.note {
+			t.Errorf("%s.Note = %q, want %q", w.id, p.Note, w.note)
+		}
+		if seen[p.ID] {
+			t.Errorf("duplicate policy ID %q", p.ID)
+		}
+		seen[p.ID] = true
+		if p.Then == model.Allow {
+			allowed++
+			if p.ID != "P11" {
+				t.Errorf("Allow policy %q is not the catch-all P11", p.ID)
+			}
+		}
+		wantScope := ""
+		if p.Then == model.Limited {
+			wantScope = "read-only"
+		}
+		if p.Scope != wantScope {
+			t.Errorf("%s.Scope = %q, want %q for Then=%s", w.id, p.Scope, wantScope, p.Then)
+		}
+		if !slices.Contains(validPillars, p.Pillar) {
+			t.Errorf("%s.Pillar %q not a valid pillar", w.id, p.Pillar)
+		}
+	}
+	if allowed != 1 {
+		t.Errorf("pack has %d Allow policies, want exactly 1", allowed)
+	}
+}
+
+var validPillars = []string{"identity", "devices", "applications", "data", "networks", "infrastructure"}
