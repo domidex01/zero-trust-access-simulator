@@ -10,8 +10,9 @@ Phase 2:
 - [x] T2.1 `Policy` struct + `Engine` with `New` pre-sorting by `(Priority, ID)`
 - [x] T2.2 `Evaluate(Signal) Decision`: evaluate all, strictest wins, scope, reason format
 - [x] T2.3 Fail-closed paths: zero matches and empty pack → `Block` with engine reason
-- [ ] T2.4 Test sweep: §9 scenario table + four global properties, incl. determinism
+- [x] T2.4 Test sweep: §9 scenario table + four global properties, incl. determinism
 
+Phase 2 (complete): T2.1 ✅ · T2.2 ✅ · T2.3 ✅ · T2.4 ✅
 Phase 1 (complete): T1.1 ✅ · T1.2 ✅ · T1.3 ✅ · T1.4 ✅ · T1.5 ✅
 Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 
@@ -28,6 +29,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T2.1 ✅ 2026-10-20 — red: compile error (Policy/New undefined) · green: 1 attempt · 4 cases (3 sort + 1 clone)
 - T2.2 ✅ 2026-10-20 — red: compile error (Engine.Evaluate undefined) · green: 1 attempt · 6 cases
 - T2.3 ✅ 2026-10-20 — red: behavioral (zero-match returned Allow) · green: 1 attempt · 3 cases
+- T2.4 ✅ 2026-10-20 — sweep: 0 red (gap-closing, T1.5 precedent; no engine bugs) · 5 scenario shapes + 6 strictest-wins + 5+3 no-silent-pass + 5 determinism · engine 100% stmt coverage · §9 audit: all bullets + 4 properties mapped to named tests
 (appended by execute-plan)
 
 

@@ -1,7 +1,10 @@
 package engine_test
 
 import (
+	"fmt"
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -187,6 +190,221 @@ func TestEvaluate_FailClosed(t *testing.T) {
 			}
 			if len(got.Matched) != 0 {
 				t.Errorf("Matched = %v, want empty", got.Matched)
+			}
+		})
+	}
+}
+
+// miniPack is a synthetic fixture pack — one policy per §9 scenario shape,
+// all four actions reachable, F01+F05 sharing the identity pillar so pillar
+// dedupe is exercised. Not the real P01–P11 (that pack is Phase 3).
+func miniPack() []engine.Policy {
+	return []engine.Policy{
+		{ID: "F01", Priority: 10, Pillar: "identity", When: func(s model.Signal) bool { return !s.MFAPresent }, Then: model.StepUpMFA, Note: "no second factor presented"},
+		{ID: "F02", Priority: 30, Pillar: "devices", When: func(s model.Signal) bool { return !s.DeviceManaged }, Then: model.Limited, Scope: "read-only", Note: "unmanaged device"},
+		{ID: "F03", Priority: 40, Pillar: "data", When: func(s model.Signal) bool { return s.RiskScore > 60 }, Then: model.Block, Note: "risk score above fixture threshold"},
+		{ID: "F04", Priority: 70, Pillar: "applications", When: func(s model.Signal) bool { return s.Role != "finance" && s.App == "payroll-app" }, Then: model.Block, Note: "app outside requester role"},
+		{ID: "F05", Priority: 99, Pillar: "identity", When: func(s model.Signal) bool { return true }, Then: model.Allow, Note: "all signals clean"},
+	}
+}
+
+// scenarioShapes is the shared §9 scenario table: miniPack against base()
+// deltas, with the full expected Decision. ScenarioShapes pins it; the
+// NoSilentPass and Deterministic properties loop over it too.
+func scenarioShapes() []struct {
+	name   string
+	signal model.Signal
+	want   model.Decision
+} {
+	note := base()
+
+	happy := base()
+	happy.MFAPresent = true
+	happy.UnfamiliarLoc = false
+	happy.DeviceManaged = true
+	happy.DeviceCompliant = true
+	happy.RiskScore = 15
+	happy.DataSensitivity = "internal"
+	happy.Location = "US"
+
+	stolen := happy
+	stolen.MFAPresent = false
+	stolen.RiskScore = 45
+
+	byod := base()
+	byod.MFAPresent = true
+	byod.UnfamiliarLoc = false
+	byod.RiskScore = 15
+	byod.DataSensitivity = "internal"
+	byod.Location = "US"
+
+	insider := happy
+	insider.Role = "engineering"
+	insider.RiskScore = 10
+
+	return []struct {
+		name   string
+		signal model.Signal
+		want   model.Decision
+	}{
+		{
+			name:   "note scenario",
+			signal: note,
+			want: model.Decision{
+				Action:  model.Block,
+				Reasons: []string{"F01: no second factor presented", "F02: unmanaged device", "F03: risk score above fixture threshold", "F05: all signals clean"},
+				Pillars: []string{"identity", "devices", "data"},
+				Matched: []string{"F01", "F02", "F03", "F05"},
+			},
+		},
+		{
+			name:   "happy",
+			signal: happy,
+			want: model.Decision{
+				Action:  model.Allow,
+				Reasons: []string{"F05: all signals clean"},
+				Pillars: []string{"identity"},
+				Matched: []string{"F05"},
+			},
+		},
+		{
+			name:   "stolen credential",
+			signal: stolen,
+			want: model.Decision{
+				Action:  model.StepUpMFA,
+				Reasons: []string{"F01: no second factor presented", "F05: all signals clean"},
+				Pillars: []string{"identity"},
+				Matched: []string{"F01", "F05"},
+			},
+		},
+		{
+			name:   "byod",
+			signal: byod,
+			want: model.Decision{
+				Action:  model.Limited,
+				Scope:   "read-only",
+				Reasons: []string{"F02: unmanaged device", "F05: all signals clean"},
+				Pillars: []string{"devices", "identity"},
+				Matched: []string{"F02", "F05"},
+			},
+		},
+		{
+			name:   "insider",
+			signal: insider,
+			want: model.Decision{
+				Action:  model.Block,
+				Reasons: []string{"F04: app outside requester role", "F05: all signals clean"},
+				Pillars: []string{"applications", "identity"},
+				Matched: []string{"F04", "F05"},
+			},
+		},
+	}
+}
+
+func TestEvaluate_ScenarioShapes(t *testing.T) {
+	for _, tc := range scenarioShapes() {
+		t.Run(tc.name, func(t *testing.T) {
+			got := engine.New(miniPack()).Evaluate(tc.signal)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("Evaluate = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEvaluate_StrictestWins(t *testing.T) {
+	pillars := []string{"identity", "devices", "applications", "data"}
+	tests := []struct {
+		name    string
+		actions []model.Action
+		want    model.Action
+		wantScp string
+	}{
+		{name: "allow alone", actions: []model.Action{model.Allow}, want: model.Allow, wantScp: ""},
+		{name: "limited beats allow", actions: []model.Action{model.Allow, model.Limited}, want: model.Limited, wantScp: "read-only"},
+		{name: "step-up beats allow and limited", actions: []model.Action{model.Allow, model.Limited, model.StepUpMFA}, want: model.StepUpMFA, wantScp: ""},
+		{name: "block beats everything", actions: []model.Action{model.Allow, model.Limited, model.StepUpMFA, model.Block}, want: model.Block, wantScp: ""},
+		{name: "step-up beats limited", actions: []model.Action{model.Limited, model.StepUpMFA}, want: model.StepUpMFA, wantScp: ""},
+		{name: "block beats step-up", actions: []model.Action{model.StepUpMFA, model.Block}, want: model.Block, wantScp: ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pack := make([]engine.Policy, len(tc.actions))
+			for i, a := range tc.actions {
+				pack[i] = engine.Policy{
+					ID:       fmt.Sprintf("S%02d", i+1),
+					Priority: 10 * (i + 1),
+					Pillar:   pillars[i],
+					When:     always,
+					Then:     a,
+					Scope:    "read-only",
+					Note:     "always true",
+				}
+			}
+			got := engine.New(pack).Evaluate(base())
+			if got.Action != tc.want {
+				t.Errorf("Action = %v, want %v", got.Action, tc.want)
+			}
+			if got.Scope != tc.wantScp {
+				t.Errorf("Scope = %q, want %q", got.Scope, tc.wantScp)
+			}
+		})
+	}
+}
+
+// failClosedEngines: the three §3.5 paths as ready engines.
+func failClosedEngines() []engine.Engine {
+	return []engine.Engine{
+		engine.New([]engine.Policy{
+			{ID: "F01", Priority: 10, Pillar: "identity", When: func(s model.Signal) bool { return s.MFAPresent }, Then: model.Allow, Note: "has second factor"},
+		}),
+		engine.New(nil),
+		engine.Engine{},
+	}
+}
+
+func TestEvaluate_NoSilentPass(t *testing.T) {
+	for _, tc := range scenarioShapes() {
+		t.Run(tc.name, func(t *testing.T) {
+			d := engine.New(miniPack()).Evaluate(tc.signal)
+			if len(d.Reasons) < 1 {
+				t.Errorf("decision has no reasons: %+v", d)
+			}
+			if len(d.Matched) > 0 && len(d.Reasons) != len(d.Matched) {
+				t.Errorf("Reasons (%d) != Matched (%d): %+v", len(d.Reasons), len(d.Matched), d)
+			}
+			if d.Action == model.Allow && len(d.Matched) < 1 {
+				t.Errorf("Allow without a matched policy: %+v", d)
+			}
+		})
+	}
+
+	names := []string{"no policy matched", "empty pack via New(nil)", "zero-value engine"}
+	for i, e := range failClosedEngines() {
+		t.Run(names[i], func(t *testing.T) {
+			d := e.Evaluate(base())
+			if len(d.Reasons) != 1 || !strings.HasPrefix(d.Reasons[0], "engine:") {
+				t.Errorf("fail-closed decision must carry exactly one engine: reason, got %+v", d)
+			}
+		})
+	}
+}
+
+func TestEvaluate_Deterministic(t *testing.T) {
+	for _, tc := range scenarioShapes() {
+		t.Run(tc.name, func(t *testing.T) {
+			e := engine.New(miniPack())
+			d1, d2 := e.Evaluate(tc.signal), e.Evaluate(tc.signal)
+			if !reflect.DeepEqual(d1, d2) {
+				t.Errorf("double eval differs: %+v vs %+v", d1, d2)
+			}
+
+			reversed := miniPack()
+			slices.Reverse(reversed)
+			dRev := engine.New(reversed).Evaluate(tc.signal)
+			if !reflect.DeepEqual(d1, dRev) {
+				t.Errorf("construction order changed the decision: %+v vs %+v", d1, dRev)
 			}
 		})
 	}
