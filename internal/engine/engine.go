@@ -41,11 +41,22 @@ func New(policies []Policy) Engine {
 	return Engine{policies: sorted}
 }
 
+// Engine failure reasons, pinned verbatim from §3.5 — the engine never
+// defaults to a grant.
+const (
+	reasonNoMatch    = "engine: no policy matched — fail closed (assume breach)"
+	reasonNoPolicies = "engine: no policies loaded — fail closed"
+)
+
 // Evaluate runs every policy (no short-circuit — each match is audited) and
 // returns the strictest matched action. Severity is the numeric order, so a
 // plain comparison picks the winner. Scope comes from the first matching
-// Limited policy, kept only when Limited is the final action.
+// Limited policy, kept only when Limited is the final action. Zero matches
+// or an empty pack block — never a silent Allow.
 func (e Engine) Evaluate(s model.Signal) model.Decision {
+	if len(e.policies) == 0 {
+		return model.Decision{Action: model.Block, Reasons: []string{reasonNoPolicies}}
+	}
 	var d model.Decision
 	var firstLimited string
 	var limitedSeen bool
@@ -65,6 +76,9 @@ func (e Engine) Evaluate(s model.Signal) model.Decision {
 			limitedSeen = true
 			firstLimited = p.Scope
 		}
+	}
+	if len(d.Matched) == 0 {
+		return model.Decision{Action: model.Block, Reasons: []string{reasonNoMatch}}
 	}
 	if d.Action == model.Limited {
 		d.Scope = firstLimited

@@ -135,3 +135,59 @@ func TestEvaluate_Semantics(t *testing.T) {
 		})
 	}
 }
+
+func TestEvaluate_FailClosed(t *testing.T) {
+	tests := []struct {
+		name string
+		eng  engine.Engine
+		want model.Decision
+	}{
+		{
+			name: "no policy matched",
+			eng: engine.New([]engine.Policy{
+				{ID: "F01", Priority: 10, Pillar: "identity", When: func(s model.Signal) bool { return s.MFAPresent }, Then: model.Allow, Note: "has second factor"},
+			}),
+			want: model.Decision{
+				Action:  model.Block,
+				Reasons: []string{"engine: no policy matched — fail closed (assume breach)"},
+			},
+		},
+		{
+			name: "empty pack via New(nil)",
+			eng:  engine.New(nil),
+			want: model.Decision{
+				Action:  model.Block,
+				Reasons: []string{"engine: no policies loaded — fail closed"},
+			},
+		},
+		{
+			name: "zero-value engine",
+			eng:  engine.Engine{},
+			want: model.Decision{
+				Action:  model.Block,
+				Reasons: []string{"engine: no policies loaded — fail closed"},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.eng.Evaluate(base())
+			if got.Action != tc.want.Action {
+				t.Errorf("Action = %v, want %v", got.Action, tc.want.Action)
+			}
+			if got.Scope != tc.want.Scope {
+				t.Errorf("Scope = %q, want %q", got.Scope, tc.want.Scope)
+			}
+			if !reflect.DeepEqual(got.Reasons, tc.want.Reasons) {
+				t.Errorf("Reasons = %v, want %v", got.Reasons, tc.want.Reasons)
+			}
+			if len(got.Pillars) != 0 {
+				t.Errorf("Pillars = %v, want empty", got.Pillars)
+			}
+			if len(got.Matched) != 0 {
+				t.Errorf("Matched = %v, want empty", got.Matched)
+			}
+		})
+	}
+}
