@@ -37,6 +37,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T3.2 ✅ 2026-10-20 — red: behavioral (policyByID("P11") Fatalf: policy P11 not in pack) · green: 1 attempt · 11 subtests
 - T3.3 ✅ 2026-10-20 — sweep: 0 red (gap-closing, T1.5/T2.4 precedent; no pack bugs) · 18 boundary rows + 6 §6 scenario shapes
 - T3.4 ✅ 2026-10-20 — sweep: 0 red (no transcription bugs; pack + table both §4-verbatim, spec diff-checked before T3.1) · policies 100% stmt coverage · §9 audit: fire/silent → FireSilence+CatchAllExclusive; boundaries → Boundaries; IDs/priorities/catch-all-once/pillars → Metadata; §6 rows → ScenarioShapes — all four bullets + all eleven §4 rows mapped
+- review #4 fix ✅ 2026-10-20 — thermonuclear review: 1 minor finding fixed (P11 hand-rolled any-match loop → slices.ContainsFunc) + 1 nit (validPillars moved above its use) · net −3 lines · 45 subtests + coverage identical
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 3)

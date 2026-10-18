@@ -3,6 +3,8 @@
 package policies
 
 import (
+	"slices"
+
 	"zt-sim/internal/engine"
 	"zt-sim/internal/model"
 )
@@ -75,12 +77,7 @@ func Pack() []engine.Policy {
 		ID: "P11", Priority: 90, Pillar: "identity", Then: model.Allow,
 		Note: "all signals clean — explicit allow",
 		When: func(s model.Signal) bool {
-			for _, p := range core {
-				if p.When(s) {
-					return false
-				}
-			}
-			return true
+			return !slices.ContainsFunc(core, func(p engine.Policy) bool { return p.When(s) })
 		},
 	}
 	return append(core, catch)

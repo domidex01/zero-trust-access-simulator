@@ -212,6 +212,8 @@ func TestPack_ScenarioShapes(t *testing.T) {
 	}
 }
 
+var validPillars = []string{"identity", "devices", "applications", "data", "networks", "infrastructure"}
+
 func TestPack_Metadata(t *testing.T) {
 	// Pinned §4 table, positional; Notes verbatim (em dashes included).
 	// When is tested behaviorally in the other tests — Policy has a func
@@ -287,5 +289,3 @@ func TestPack_Metadata(t *testing.T) {
 		t.Errorf("pack has %d Allow policies, want exactly 1", allowed)
 	}
 }
-
-var validPillars = []string{"identity", "devices", "applications", "data", "networks", "infrastructure"}
