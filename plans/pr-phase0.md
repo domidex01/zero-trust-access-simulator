@@ -17,7 +17,9 @@ contract — subcommand bodies arrive in Phases 5–6.
   stderr + exit 70 (`EX_SOFTWARE`; can't collide with decide's 0–3 / run's 0/1).
 - **Makefile** — `build / test / fmt / vet / run-demo` (Phase-0 `run-demo` prints
   the version; full §5 transcript lands in T7.4).
-- **Directory scaffold** — `internal/{model,engine,policies,scenario,report}`, `scenarios/`.
+- **Layout** — code targets `internal/{model,engine,policies,scenario,report}` +
+  `scenarios/`; they exist in the working tree only (git can't track empty dirs, no
+  `.gitkeep` by plan decision) and fill with real files in Phases 1–4.
 - **plans/** — plan.md + test-plan.md, tasks T1–T3 ticked with run log.
 
 ## Evidence (all exit 0, re-verified on this branch)
