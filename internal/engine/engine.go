@@ -40,3 +40,34 @@ func New(policies []Policy) Engine {
 	})
 	return Engine{policies: sorted}
 }
+
+// Evaluate runs every policy (no short-circuit — each match is audited) and
+// returns the strictest matched action. Severity is the numeric order, so a
+// plain comparison picks the winner. Scope comes from the first matching
+// Limited policy, kept only when Limited is the final action.
+func (e Engine) Evaluate(s model.Signal) model.Decision {
+	var d model.Decision
+	var firstLimited string
+	var limitedSeen bool
+	for _, p := range e.policies {
+		if !p.When(s) {
+			continue
+		}
+		d.Matched = append(d.Matched, p.ID)
+		d.Reasons = append(d.Reasons, p.ID+": "+p.Note)
+		if !slices.Contains(d.Pillars, p.Pillar) {
+			d.Pillars = append(d.Pillars, p.Pillar)
+		}
+		if p.Then > d.Action {
+			d.Action = p.Then
+		}
+		if p.Then == model.Limited && !limitedSeen {
+			limitedSeen = true
+			firstLimited = p.Scope
+		}
+	}
+	if d.Action == model.Limited {
+		d.Scope = firstLimited
+	}
+	return d
+}

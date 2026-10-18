@@ -8,7 +8,7 @@
 ## Status
 Phase 2:
 - [x] T2.1 `Policy` struct + `Engine` with `New` pre-sorting by `(Priority, ID)`
-- [ ] T2.2 `Evaluate(Signal) Decision`: evaluate all, strictest wins, scope, reason format
+- [x] T2.2 `Evaluate(Signal) Decision`: evaluate all, strictest wins, scope, reason format
 - [ ] T2.3 Fail-closed paths: zero matches and empty pack → `Block` with engine reason
 - [ ] T2.4 Test sweep: §9 scenario table + four global properties, incl. determinism
 
@@ -24,7 +24,9 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T1.3 ✅ 2026-10-20 — red: compile error (model.SensitivityRank undefined) · green: 1 attempt · 8 cases
 - T1.4 ✅ 2026-10-20 — red: compile error (Validate/DecodeSignal undefined) · green: 1 attempt · 21 cases · test-plan fix: "limits accepted" split into lower/upper rows (LocalHour can't be 0 and 23 at once)
 - T1.5 ✅ 2026-10-20 — audit: all §9 bullets already mapped; +1 regression test (UnmarshalText no-state-change, passed immediately) · model 100% stmt coverage · no model bugs found
-- T2.1 ✅ 2026-10-20 — red: compile error (Policy/New undefined) · green: 1 attempt · 4 cases (3 sort + 1 clone)
+- review #2 fix ✅ 2026-10-20 — thermonuclear review: JSONText test re-tabled with concrete types (deleted any-dispatch/assertDecision/anyErr), single actionNames table (deleted knownAction) · net −50 lines · 43 subtests + coverage identical
+- T2.2 ✅ 2026-10-20 — red: compile error (Engine.Evaluate undefined) · green: 1 attempt · 6 cases
+(appended by execute-plan)
 
 
 ## Not building (YAGNI, Phase 2)
