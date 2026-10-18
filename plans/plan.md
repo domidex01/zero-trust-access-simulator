@@ -7,7 +7,7 @@
 
 ## Status
 Phase 1:
-- [ ] T1.1 `Signal` + `Decision` structs, exact §2 JSON tags (incl. bare `Action` type)
+- [x] T1.1 `Signal` + `Decision` structs, exact §2 JSON tags (incl. bare `Action` type)
 - [ ] T1.2 `Action` behavior: `String()`, text marshalling, severity order
 - [ ] T1.3 `SensitivityRank(string) (int, error)`
 - [ ] T1.4 `Signal.Validate()` (every §2 rule) + strict decoder helper
@@ -19,6 +19,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T1 ✅ 2026-10-19 — no test (scaffolding) · go build ./... exit 0 · git repo initialized (repo-local identity, global untouched)
 - T2 ✅ 2026-10-19 — red: compile error (undefined: run) · green: 1 attempt · 7 cases
 - T3 ✅ 2026-10-19 — no test (build wiring) · make build/vet/test/fmt/run-demo all pass · +1-line .gitignore for the built binary
+- T1.1 ✅ 2026-10-20 — red: compile error (model.Signal undefined) · green: 1 attempt · 2 cases
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 1)
