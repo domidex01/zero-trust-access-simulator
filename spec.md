@@ -395,10 +395,10 @@ Work top-to-bottom; each phase builds on the previous one. Commit per task.
 ### Phase 3 — Policy pack
 > Goal: P01–P11 exactly as §4.
 
-- [ ] **T3.1** Implement P01–P10 matchers; each `Note` copied verbatim from §4 (audit lines)
-- [ ] **T3.2** P11 catch-all: matches iff no other pack policy matched
-- [ ] **T3.3** `policies_test.go`: per-policy fire/silence tests; boundary tests (risk 70/71, `localHour` 4/5, sensitivity confidential vs internal)
-- [ ] **T3.4** Pack sanity test: IDs unique & ordered as table, catch-all present once, pillar values valid
+- [x] **T3.1** Implement P01–P10 matchers; each `Note` copied verbatim from §4 (audit lines)
+- [x] **T3.2** P11 catch-all: matches iff no other pack policy matched
+- [x] **T3.3** `policies_test.go`: per-policy fire/silence tests; boundary tests (risk 70/71, `localHour` 4/5, sensitivity confidential vs internal)
+- [x] **T3.4** Pack sanity test: IDs unique & ordered as table, catch-all present once, pillar values valid
 
 **Done when**: `go test ./internal/policies/` green; every scenario row in §6 can be derived by hand from the pack.
 
