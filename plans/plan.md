@@ -5,11 +5,13 @@
 > Task mapping: T1 ↔ spec T0.1, T2 ↔ spec T0.2, T3 ↔ spec T0.3.
 
 ## Status
-- [ ] T1 Init module, scaffold directories, git repo
-- [ ] T2 main.go — testable dispatch: `--version`, usage/unknown → 64, subcommand stubs
+- [x] T1 Init module, scaffold directories, git repo
+- [x] T2 main.go — testable dispatch: `--version`, usage/unknown → 64, subcommand stubs
 - [ ] T3 Makefile — build / test / fmt / vet / run-demo
 
 ## Run log
+- T1 ✅ 2026-10-19 — no test (scaffolding) · go build ./... exit 0 · git repo initialized (repo-local identity, global untouched)
+- T2 ✅ 2026-10-19 — red: compile error (undefined: run) · green: 1 attempt · 7 cases
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 0)
