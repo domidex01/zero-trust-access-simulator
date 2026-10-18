@@ -11,7 +11,7 @@ Phase 1:
 - [x] T1.2 `Action` behavior: `String()`, text marshalling, severity order
 - [x] T1.3 `SensitivityRank(string) (int, error)`
 - [x] T1.4 `Signal.Validate()` (every §2 rule) + strict decoder helper
-- [ ] T1.5 Test completeness sweep against the §9 model-suite list
+- [x] T1.5 Test completeness sweep against the §9 model-suite list
 
 Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 
@@ -23,6 +23,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T1.2 ✅ 2026-10-20 — red: compile error (Action.String undefined) · green: 1 attempt · 10 cases · test-plan fix: out-of-range MarshalText row now asserts an error (was vacuous)
 - T1.3 ✅ 2026-10-20 — red: compile error (model.SensitivityRank undefined) · green: 1 attempt · 8 cases
 - T1.4 ✅ 2026-10-20 — red: compile error (Validate/DecodeSignal undefined) · green: 1 attempt · 21 cases · test-plan fix: "limits accepted" split into lower/upper rows (LocalHour can't be 0 and 23 at once)
+- T1.5 ✅ 2026-10-20 — audit: all §9 bullets already mapped; +1 regression test (UnmarshalText no-state-change, passed immediately) · model 100% stmt coverage · no model bugs found
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 1)

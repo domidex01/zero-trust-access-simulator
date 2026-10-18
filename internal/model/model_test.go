@@ -420,3 +420,15 @@ func TestDecodeSignal(t *testing.T) {
 		})
 	}
 }
+
+// TestAction_UnmarshalTextUnknownLeavesUnchanged pins the API contract that a
+// failed unmarshal must not corrupt a pre-set action (§9: action text marshalling).
+func TestAction_UnmarshalTextUnknownLeavesUnchanged(t *testing.T) {
+	d := model.Decision{Action: model.Block}
+	if err := json.Unmarshal([]byte(`{"action":"alow"}`), &d); err == nil {
+		t.Fatalf("err = nil, want unknown-action error")
+	}
+	if d.Action != model.Block {
+		t.Errorf("action = %v, want unchanged Block", d.Action)
+	}
+}
