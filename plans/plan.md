@@ -11,7 +11,7 @@
 Phase 3:
 - [x] T3.1 P01–P10 matchers in `Pack()`; Notes verbatim (structurally pinned by T3.4)
 - [x] T3.2 P11 catch-all: matches iff no P01–P10 matched
-- [ ] T3.3 Sweep: boundaries (risk 70/71/40/39, hour 4/5/0, confidential/internal) + the six §6 scenario shapes against the real pack
+- [x] T3.3 Sweep: boundaries (risk 70/71/40/39, hour 4/5/0, confidential/internal) + the six §6 scenario shapes against the real pack
 - [ ] T3.4 Sweep: pack sanity — §4 metadata verbatim, IDs unique, catch-all exactly once, pillars valid
 
 Phase 2 (complete): T2.1 ✅ · T2.2 ✅ · T2.3 ✅ · T2.4 ✅
@@ -35,6 +35,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - review #3 fix ✅ 2026-10-20 — thermonuclear review: 3 findings, all minor, all fixed (cmp.Or two-key comparator + builtin max in Evaluate; fail-closed table deduped into shared failClosedCases, killing the parallel names slice + duplicated F01 literal) · net −9 lines · 36 subtests + coverage identical
 - T3.1 ✅ 2026-10-20 — red: build failure (no non-test Go files in internal/policies — Pack undefined) · green: 1 attempt · 10 cases
 - T3.2 ✅ 2026-10-20 — red: behavioral (policyByID("P11") Fatalf: policy P11 not in pack) · green: 1 attempt · 11 subtests
+- T3.3 ✅ 2026-10-20 — sweep: 0 red (gap-closing, T1.5/T2.4 precedent; no pack bugs) · 18 boundary rows + 6 §6 scenario shapes
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 3)
