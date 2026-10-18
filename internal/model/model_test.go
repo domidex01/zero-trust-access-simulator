@@ -100,25 +100,34 @@ func TestAction_String(t *testing.T) {
 const goldenDecision = `{"action":"limited","scope":"read-only","reasons":["P04: unmanaged device — least-privilege grant"],"pillars":["devices"],"matched":["P04"]}`
 
 func TestAction_JSONText(t *testing.T) {
+	t.Run("decision marshals action as text", func(t *testing.T) {
+		got, err := json.Marshal(model.Decision{
+			Action:  model.Limited,
+			Scope:   "read-only",
+			Reasons: []string{"P04: unmanaged device — least-privilege grant"},
+			Pillars: []string{"devices"},
+			Matched: []string{"P04"},
+		})
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if string(got) != goldenDecision {
+			t.Errorf("marshal = %s, want %s", got, goldenDecision)
+		}
+	})
+
+	t.Run("MarshalText out of range", func(t *testing.T) {
+		if _, err := json.Marshal(model.Action(9)); err == nil {
+			t.Errorf("marshal err = nil, want an error (never emit garbage text)")
+		}
+	})
+
 	tests := []struct {
 		name    string
-		give    string // JSON to unmarshal, if any
-		marshal any    // value to marshal, if any
-		want    any    // string (exact JSON), model.Decision, or model.Action
-		wantErr string // non-empty → unmarshal must fail containing this
-		anyErr  bool   // an error is required, message unpinned
+		give    string
+		want    model.Decision
+		wantErr string
 	}{
-		{
-			name: "decision marshals action as text",
-			marshal: model.Decision{
-				Action:  model.Limited,
-				Scope:   "read-only",
-				Reasons: []string{"P04: unmanaged device — least-privilege grant"},
-				Pillars: []string{"devices"},
-				Matched: []string{"P04"},
-			},
-			want: goldenDecision,
-		},
 		{
 			name: "decision round-trip",
 			give: goldenDecision,
@@ -130,78 +139,37 @@ func TestAction_JSONText(t *testing.T) {
 				Matched: []string{"P04"},
 			},
 		},
-		{name: "allow round-trips", give: `{"action":"allow"}`, want: model.Allow},
-		{name: "limited round-trips", give: `{"action":"limited"}`, want: model.Limited},
-		{name: "stepUpMFA round-trips", give: `{"action":"stepUpMFA"}`, want: model.StepUpMFA},
-		{name: "block round-trips", give: `{"action":"block"}`, want: model.Block},
+		{name: "allow round-trips", give: `{"action":"allow"}`, want: model.Decision{Action: model.Allow}},
+		{name: "limited round-trips", give: `{"action":"limited"}`, want: model.Decision{Action: model.Limited}},
+		{name: "stepUpMFA round-trips", give: `{"action":"stepUpMFA"}`, want: model.Decision{Action: model.StepUpMFA}},
+		{name: "block round-trips", give: `{"action":"block"}`, want: model.Decision{Action: model.Block}},
 		{name: "unknown action text", give: `{"action":"alow"}`, wantErr: `unknown action "alow"`},
-		{name: "MarshalText out of range", marshal: model.Action(9), anyErr: true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.give != "" {
-				var got model.Decision
-				err := json.Unmarshal([]byte(tc.give), &got)
-				switch {
-				case tc.wantErr != "":
-					if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
-						t.Errorf("unmarshal err = %v, want containing %q", err, tc.wantErr)
-					}
-				case err != nil:
-					t.Fatalf("unmarshal: %v", err)
-				case tc.anyErr:
-					t.Errorf("unmarshal err = nil, want an error")
-				default:
-					assertDecision(t, got, tc.want)
-				}
-				return
-			}
-			got, err := json.Marshal(tc.marshal)
+			var got model.Decision
+			err := json.Unmarshal([]byte(tc.give), &got)
 			switch {
-			case tc.anyErr:
-				if err == nil {
-					t.Errorf("marshal err = nil, want an error (never emit garbage text)")
+			case tc.wantErr != "":
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Errorf("unmarshal err = %v, want containing %q", err, tc.wantErr)
 				}
 			case err != nil:
-				t.Fatalf("marshal: %v", err)
-			default:
-				assertDecision(t, got, tc.want) // marshal path: tc.want is the exact JSON string
+				t.Fatalf("unmarshal: %v", err)
+			case !equalDecision(got, tc.want):
+				t.Errorf("unmarshal = %+v, want %+v", got, tc.want)
 			}
 		})
 	}
 }
 
-// assertDecision compares tc.want (string JSON, model.Decision, or model.Action)
-// against the unmarshaled or marshaled result.
-func assertDecision(t *testing.T, got any, want any) {
-	t.Helper()
-	switch want := want.(type) {
-	case string: // marshal direction: want is the exact JSON text
-		if s, ok := got.([]byte); !ok || string(s) != want {
-			t.Errorf("marshal = %v, want %s", got, want)
-		}
-	case model.Decision:
-		d, ok := got.(model.Decision)
-		if !ok {
-			t.Fatalf("unexpected type %T", got)
-		}
-		if d.Action != want.Action || d.Scope != want.Scope ||
-			!slices.Equal(d.Reasons, want.Reasons) ||
-			!slices.Equal(d.Pillars, want.Pillars) ||
-			!slices.Equal(d.Matched, want.Matched) {
-			t.Errorf("unmarshal = %+v, want %+v", d, want)
-		}
-	case model.Action:
-		d, ok := got.(model.Decision)
-		if !ok {
-			t.Fatalf("unexpected type %T", got)
-		}
-		if d.Action != want {
-			t.Errorf("unmarshal action = %v, want %v", d.Action, want)
-		}
-	default:
-		t.Fatalf("bad want type %T", want)
-	}
+// equalDecision compares field-wise; Decision is not comparable with ==
+// because of its slice fields.
+func equalDecision(a, b model.Decision) bool {
+	return a.Action == b.Action && a.Scope == b.Scope &&
+		slices.Equal(a.Reasons, b.Reasons) &&
+		slices.Equal(a.Pillars, b.Pillars) &&
+		slices.Equal(a.Matched, b.Matched)
 }
 
 func TestAction_SeverityOrder(t *testing.T) {
