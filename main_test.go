@@ -677,6 +677,71 @@ func TestRun_ExitCodes(t *testing.T) {
 	}
 }
 
+// TestRun_AuditAppendOnly pins §10 Phase 6's done-when: re-running decide
+// never mutates old lines. Two run() calls = two processes' worth of opens.
+func TestRun_AuditAppendOnly(t *testing.T) {
+	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
+	happy := writeFile(t, "["+happySignal+"]")
+	attacker := writeFile(t, "["+attackerSignal+"]")
+
+	var out bytes.Buffer
+	if exit := run([]string{"decide", "--audit", auditPath, happy}, strings.NewReader(""), &out, &out); exit != 0 {
+		t.Fatalf("first decide exit = %d, want 0", exit)
+	}
+	first, err := os.ReadFile(auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if exit := run([]string{"decide", "--audit", auditPath, attacker}, strings.NewReader(""), &out, &out); exit != 3 {
+		t.Fatalf("second decide exit = %d, want 3", exit)
+	}
+	second, err := os.ReadFile(auditPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSuffix(string(second), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("want 2 lines after the second run, got %d: %q", len(lines), second)
+	}
+	if lines[0]+"\n" != string(first) {
+		t.Errorf("line 1 mutated by the second run:\n got %s\nwant %s", lines[0], first)
+	}
+	if !strings.Contains(lines[1], "unknown@throwaway.example") {
+		t.Errorf("second append missing: %s", lines[1])
+	}
+}
+
+// TestRun_AuditTruncated pins §10 T6.4's corruption case through the CLI:
+// a truncated final line (no newline) is detected and reported, exit 65.
+func TestRun_AuditTruncated(t *testing.T) {
+	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
+	happy := writeFile(t, "["+happySignal+"]")
+	run([]string{"decide", "--audit", auditPath, happy}, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{})
+
+	f, err := os.OpenFile(auditPath, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(`{"ts":"2026-`); err != nil { // truncated, no \n
+		t.Fatal(err)
+	}
+	f.Close()
+
+	var stdout, stderr bytes.Buffer
+	exit := run([]string{"audit", auditPath}, strings.NewReader(""), &stdout, &stderr)
+	if exit != 65 {
+		t.Fatalf("exit = %d, want 65", exit)
+	}
+	if !strings.Contains(stderr.String(), "line 2") {
+		t.Errorf("stderr %q must report line 2", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "counts: allow=1") {
+		t.Errorf("valid record must still print + count: %q", stdout.String())
+	}
+}
+
 // TestExamples_AttackerMatchesPack pins the demo fixture to the pack it
 // mirrors — examples/attacker-signals.json exists so the §5 session works
 // under the decide-rejects-packs rule, and silent drift would break the

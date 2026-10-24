@@ -426,10 +426,10 @@ Work top-to-bottom; each phase builds on the previous one. Commit per task.
 ### Phase 6 — Audit log
 > Goal: append-only JSONL per §7.
 
-- [ ] **T6.1** `internal/report`: `AuditWriter` — `O_APPEND|O_CREATE|O_WRONLY`, one JSON line per decision, `ts` = write time
-- [ ] **T6.2** Wire `--audit` into `decide` and `run`
-- [ ] **T6.3** `audit` subcommand: read, validate, print action counts; corrupt lines reported → exit 65
-- [ ] **T6.4** Test: append twice → first line byte-identical; truncated/corrupt line detected
+- [x] **T6.1** `internal/report`: `AuditWriter` — `O_APPEND|O_CREATE|O_WRONLY`, one JSON line per decision, `ts` = write time
+- [x] **T6.2** Wire `--audit` into `decide` and `run`
+- [x] **T6.3** `audit` subcommand: read, validate, print action counts; corrupt lines reported → exit 65
+- [x] **T6.4** Test: append twice → first line byte-identical; truncated/corrupt line detected
 
 **Done when**: re-running `decide` never mutates old lines; tests green.
 

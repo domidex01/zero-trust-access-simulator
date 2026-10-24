@@ -37,7 +37,7 @@ Phase 6:
 - [x] T6.1 `internal/report`: `AuditRecord` + `AuditWriter` — `O_APPEND|O_CREATE|O_WRONLY`, one JSON line per decision, `ts` = injected write clock
 - [x] T6.2 Wire `--audit` into `decide` and `run` (append per decision, footer, 65 on audit failure)
 - [x] T6.3 `audit` subcommand: `ReadAudit` + counts; re-print decisions, corrupt lines reported → exit 65
-- [ ] T6.4 Append-only + corruption sweep at CLI level; demo session with `--audit`; spec §10 ticks
+- [x] T6.4 Append-only + corruption sweep at CLI level; demo session with `--audit`; spec §10 ticks
 
 Phase 5 (complete): T5.1 ✅ · T5.2 ✅ · T5.3 ✅ · T5.4 ✅ · T5.5 ✅
 Phase 4 (complete): T4.1 ✅ · T4.2 ✅ · T4.3 ✅ · T4.4 ✅
@@ -81,6 +81,8 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T6.1 ✅ 2026-10-24 — red: compile error (undefined: report.NewAuditWriter) · green: 1 attempt · 6 subtests · test-side fix: pinned wantLine constant's tail mistyped ("P01"} + "]}), corrected to the scratch-marshaled literal — production output was right · literal generated via scratch marshal (tmp-gen, deleted)
 - T6.2 ✅ 2026-10-24 — red: behavioral (flag provided but not defined: -audit, 8/9 subtests) · green: 1 attempt · 6 + 3 subtests · cmdRun switched to its own FlagSet (usage rows unchanged, exit map preserved) · refactor skipped: audit open/append/close loops differ per command, auditFooter dedupes the shared line
 - T6.3 ✅ 2026-10-24 — red: compile error (undefined: report.ReadAudit/AuditSummary) + behavioral (audit 70 stub, 5 + 4 subtests) · green: 1 attempt · 9 + 2 + 5 subtests · test-side fix ×2: unknown-field/unknown-action rows listed two substrings for one error → single substring pinning line number + offending token (runner's one-substring-per-error contract kept) · stub rows retired: TestRun_Dispatch "audit is stubbed" deleted, TestRun_ExitCodes 70-row → 0/64/65/65 rows
+- T6.4 ✅ 2026-10-24 — sweep: 0 red (T1.5/T2.4/T3.3/T4.3/T5.5 precedent; no wiring bugs) · TestRun_AuditAppendOnly (two run() opens, line 1 byte-identical) + TestRun_AuditTruncated (no-\n half-line → 65, valid record still printed/counted) · demo session: decide --audit → §5 table + `audit: 7 policies matched, decision appended to audit.jsonl`, exit 3; second run exit 3, 2 lines, line 1 unchanged; audit → table + `counts: allow=0 limited=0 stepUpMFA=0 block=2`, exit 0; garbage line 3 → reported, exit 65 · divergence noted: §5's sketch puts --audit after the positional, stdlib flag (§5-pinned) parses flags-first — demo runs flags-first, §5's session ordering is illustrative (Phase 5 divergence-note precedent) · .gitignore += audit.jsonl · spec §10 Phase 6 boxes ticked
+- Phase 6 complete — §7 append-only JSONL + §5 audit subcommand satisfied; §10 Phase 6 done-when "re-running decide never mutates old lines" pinned by TestRun_AuditAppendOnly
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 6)
