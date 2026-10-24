@@ -405,10 +405,10 @@ Work top-to-bottom; each phase builds on the previous one. Commit per task.
 ### Phase 4 — Scenarios & acceptance
 > Goal: the six packs run as tests.
 
-- [ ] **T4.1** `internal/scenario`: pack loader + validator (schema from §6), `Check(case) error` comparing action / `reasonsContain` / `scope`
-- [ ] **T4.2** Author the six packs from §6 with `expect` blocks (use the §6 tables as the source of truth)
-- [ ] **T4.3** `scenario_test.go` walks `../../scenarios/*.json` and asserts every expectation
-- [ ] **T4.4** Verify the outcome of each pack by hand against §4 once — they must agree before moving on
+- [x] **T4.1** `internal/scenario`: pack loader + validator (schema from §6), `Check(case) error` comparing action / `reasonsContain` / `scope`
+- [x] **T4.2** Author the six packs from §6 with `expect` blocks (use the §6 tables as the source of truth)
+- [x] **T4.3** `scenario_test.go` walks `../../scenarios/*.json` and asserts every expectation
+- [x] **T4.4** Verify the outcome of each pack by hand against §4 once — they must agree before moving on
 
 **Done when**: `go test ./...` runs all packs green.
 
