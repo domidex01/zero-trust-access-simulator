@@ -73,16 +73,13 @@ func cmdDecide(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 64
 	}
 	rest := fs.Args()
-	if *format != "table" && *format != "json" {
-		fmt.Fprintln(stderr, decideUsage)
-		return 64
-	}
-	if *useStdin {
-		if len(rest) > 0 {
-			fmt.Fprintln(stderr, decideUsage)
-			return 64
-		}
-	} else if len(rest) != 1 {
+	// every usage rule in one guard: bad format, extra positional, or
+	// stdin xor file violated
+	switch {
+	case *format != "table" && *format != "json",
+		len(rest) > 1,
+		*useStdin && len(rest) > 0,
+		!*useStdin && len(rest) != 1:
 		fmt.Fprintln(stderr, decideUsage)
 		return 64
 	}
@@ -112,12 +109,12 @@ func cmdDecide(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	e := engine.New(policies.Pack())
 	rows := make([]report.Row, len(signals))
 	decisions := make([]model.Decision, len(signals))
-	strictest := 0
+	strictest := model.Allow
 	for i, s := range signals {
 		d := e.Evaluate(s)
 		rows[i] = report.Row{Signal: s, Decision: d}
 		decisions[i] = d
-		strictest = max(strictest, int(d.Action))
+		strictest = max(strictest, d.Action)
 	}
 
 	var err error
@@ -130,7 +127,7 @@ func cmdDecide(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "decide: %v\n", err)
 		return 65
 	}
-	return strictest
+	return int(strictest) // §2: the severity doubles as the exit code
 }
 
 func main() {
@@ -170,13 +167,13 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 		return 65
 	}
 
-	e := engine.New(policies.Pack())
+	eng := engine.New(policies.Pack())
 	var results []report.PackResult
 	failed := false
 	for _, p := range packs {
 		res := report.PackResult{Name: p.Name, Strictest: model.Allow}
 		for _, c := range p.Cases {
-			d := e.Evaluate(c.Signal)
+			d := eng.Evaluate(c.Signal)
 			res.Cases++
 			res.Strictest = max(res.Strictest, d.Action)
 			if err := c.Check(d); err != nil {

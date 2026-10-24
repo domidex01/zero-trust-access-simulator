@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"zt-sim/internal/model"
+	"zt-sim/internal/scenario"
 )
 
 func TestRun_Dispatch(t *testing.T) {
@@ -387,5 +388,28 @@ func TestRun_ExitCodes(t *testing.T) {
 				t.Errorf("exit = %d, want %d\nstdout:\n%s\nstderr:\n%s", exit, tc.wantExit, stdout.String(), stderr.String())
 			}
 		})
+	}
+}
+
+// TestExamples_AttackerMatchesPack pins the demo fixture to the pack it
+// mirrors — examples/attacker-signals.json exists so the §5 session works
+// under the decide-rejects-packs rule, and silent drift would break the
+// Phase 7 README transcript.
+func TestExamples_AttackerMatchesPack(t *testing.T) {
+	f, err := os.Open("examples/attacker-signals.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	signals, err := model.DecodeSignals(f)
+	if err != nil {
+		t.Fatalf("examples fixture no longer decodes: %v", err)
+	}
+	pack, err := scenario.Load("scenarios/attacker.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(signals) != 1 || signals[0] != pack.Cases[0].Signal {
+		t.Errorf("examples/attacker-signals.json drifted from scenarios/attacker.json")
 	}
 }
