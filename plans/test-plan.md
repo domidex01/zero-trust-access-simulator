@@ -1,292 +1,233 @@
-# Test plan — zero-trust-access-simulator (Phase 5 — CLI)
+# Test plan — zero-trust-access-simulator (Phase 6 — Audit log)
 
 Test files:
-- `internal/report/report_test.go` — **package `report_test`** (black-box; imports
-  `zt-sim/internal/model`, and `zt-sim/internal/engine` from T5.4 on for `Policies`)
-- `internal/model/model_test.go` (edit) — `TestDecodeSignals`, package `model_test`
-- `main_test.go` (edit) — package `main`, white-box (`run`/`cmd*` are unexported);
-  `TestRun_Dispatch` rows for an implemented subcommand are deleted when that
-  subcommand lands (replaced by its own `Test*`), the `audit` stub row survives
-  until Phase 6
+- `internal/report/audit_test.go` (new) — **package `report_test`** (black-box; imports
+  `zt-sim/internal/model`)
+- `main_test.go` (edit) — package `main`, white-box (`run`/`cmd*` unexported);
+  `TestRun_Dispatch`'s "audit is stubbed" row is deleted when `cmdAudit` lands (T6.3,
+  replaced by `TestRun_Audit`), `TestRun_ExitCodes`' audit-70 row → 0/64/65 rows (T6.3)
 
 Names follow `TestFunc_Scenario`; subtests read as sentences in failure output.
 
 ## Code under test (pin these so execution needs no decisions)
 
 ```go
-// internal/report/report.go
-package report // imports model (+ engine from T5.4) and stdlib only
+// internal/report/audit.go — package report; imports model + stdlib only.
+// report.go's §5 tables stay frozen; audit lives in its own file.
 
-// Row pairs the request with its outcome: the table's USER column comes
-// from the signal, everything else from the decision.
-type Row struct {
-	Signal   model.Signal
-	Decision model.Decision
+// AuditRecord is one JSONL line of the audit log (§7). Decision is embedded
+// so action/scope/reasons/pillars/matched flatten to top level — struct field
+// order is §7's field order: ts, cmd, source, signal, action, scope, reasons,
+// pillars, matched.
+type AuditRecord struct {
+	TS        time.Time    `json:"ts"`     // write time — injected clock
+	Cmd       string       `json:"cmd"`    // "decide" | "run"
+	Source    string       `json:"source"` // path as given / "stdin" / pack path
+	Signal    model.Signal `json:"signal"`
+	Decision               // embedded: action, scope, reasons, pillars, matched
 }
 
-// Decisions writes the USER / ACTION / REASONS table and a pillars footer
-// (§5: columns + content are the contract; rendering beyond that is ours —
-// tabwriter, padding 2). One line per reason; action uppercased; footer
-// pillars unique across rows in first-appearance order.
-func Decisions(w io.Writer, rows []Row) error
+// NewAuditWriter opens path O_APPEND|O_CREATE|O_WRONLY 0644 — existing lines
+// are never rewritten (§7). now is the ts clock; main passes time.Now.
+func NewAuditWriter(path string, now func() time.Time) (*AuditWriter, error)
 
-// DecisionsJSON writes decisions as an indented JSON array (§5 --format json).
-func DecisionsJSON(w io.Writer, decisions []model.Decision) error
+// Append writes one record: json.Marshal + "\n", one Write call, no buffering,
+// no validation (the CLI validated upstream).
+func (a *AuditWriter) Append(cmd, source string, s model.Signal, d model.Decision) error
+func (a *AuditWriter) Close() error
 
-// PackResult is one row of the run summary table (T5.3).
-type PackResult struct {
-	Name      string
-	Cases     int
-	Pass, Fail int
-	Strictest model.Action // max action across the pack's decisions
-}
+// ReadAudit strictly decodes every line (DisallowUnknownFields); corrupt lines
+// come back as errors carrying their 1-based line number while valid records
+// still decode (§7: reported, not silently skipped). Blank line = corrupt.
+func ReadAudit(r io.Reader) (records []AuditRecord, errs []error)
 
-// PackSummary writes the PACK / CASES / PASS / FAIL / STRICTEST table (T5.3).
-func PackSummary(w io.Writer, results []PackResult) error
-
-// Policies writes the ID / PRIORITY / PILLAR / ACTION / NOTE table (T5.4).
-func Policies(w io.Writer, policies []engine.Policy) error
+// AuditSummary writes one line: "counts: allow=N limited=N stepUpMFA=N block=N"
+// — §2 severity order, Action.String names, all four always.
+func AuditSummary(w io.Writer, records []AuditRecord) error
 ```
 
 ```go
-// internal/model/signal.go (T5.2, next to DecodeSignal)
-// DecodeSignals strictly decodes the decide file format — a JSON array of
-// signals — validating every element. Empty array (or null) is an input
-// error: nothing to decide must not exit 0.
-func DecodeSignals(r io.Reader) ([]Signal, error)
-// json.Decoder + DisallowUnknownFields → Decode(&[]Signal) →
-// len 0 → "empty signals array" → Validate each (first failure wins).
-```
-
-```go
-// main.go
-func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int
-// T5.2 adds the stdin param (main passes os.Stdin) so decide --stdin is testable.
-
-func cmdDecide(args []string, stdin io.Reader, stdout, stderr io.Writer) int
-// flag.NewFlagSet("decide", flag.ContinueOnError), fs.SetOutput(stderr)
-// flags: --stdin bool · --format string (default "table")
-// parse error, format ∉ {table,json}, (no positional && !stdin), (positional && stdin),
-// >1 positional → usage + 64.
-// input: os.Open(path)+DecodeSignals | DecodeSignal(stdin); error → stderr + 65.
-// engine.New(policies.Pack()) once; evaluate all (input order);
-// report.Decisions | report.DecisionsJSON (error → 65);
-// return max int(d.Action) over decisions.
-
-func cmdRun(args []string, stdout, stderr io.Writer) int
-// ≠1 arg → 64. os.ReadDir(dir) error → 65. Keep top-level *.json (ReadDir is
-// sorted). 0 packs → 65 "no scenario packs in <dir>". scenario.Load error →
-// abort → 65. Per case: Evaluate + Check; print "PASS <pack>/<case>" or
-// "FAIL <pack>/<case>: <err>"; PackResult{Name: pack.Name, Strictest: max};
-// report.PackSummary last; return 1 if any fail else 0.
-
-func cmdPolicies(args []string, stdout, stderr io.Writer) int
-// ≠0 extra args → 64. report.Policies(stdout, policies.Pack()); error → 65; else 0.
+// main.go (T6.2/T6.3 edits)
+// cmdDecide: +fs.String("audit", "", …). After input decode (never before —
+// bad input must not create the file): if set, NewAuditWriter(*audit, time.Now)
+// → err 65. After evaluation: Append("decide", source, s, d) per decision
+// (source = path as given | "stdin"), Close → err 65 (beats strictest).
+// After rendering: footer "audit: %d policies matched, decision appended to %s"
+// (%d = Σ len(Matched)) — printed by main, report untouched.
+//   // shortcut: "decision" stays singular for N>1 records; reword when a
+//   // consumer of the footer cares
+//
+// cmdRun: own flag.NewFlagSet("run", ContinueOnError, output→stderr), same
+// --audit flag; fs.Args() != 1 → 64. Per record: Append("run",
+// filepath.Join(dir, entry.Name()), c.Signal, d); err → 65 (beats 0/1);
+// footer after PackSummary.
+//
+// cmdAudit(args, stdout, stderr) int: != 1 arg → 64 (auditUsage); os.Open
+// err → 65; ReadAudit; each err → stderr "audit: <path>: <err>"; if >0 records:
+// report.Decisions(stdout, rows built from records) (re-print per §7); always
+// report.AuditSummary; any corrupt line → 65 (valid records still printed).
+// Usage strings: const's flag block → "flags on decide/run:" + --audit line;
+// decideUsage/runUsage gain [--audit <file>]; auditUsage added.
 ```
 
 ## Shared fixtures
 
-Hand-built decisions/rows (report is engine-free for T5.1 — no evaluation involved):
-
 ```go
-attackerD := model.Decision{Action: model.Block,
-	Reasons: []string{"P01: no second factor presented — verify explicitly",
-		"P03: unfamiliar location and no MFA — assume breach",
-		"P07: risk score above hard threshold"},
-	Pillars: []string{"identity", "devices", "data", "applications"},
-	Matched: []string{"P01", "P03", "P07"}}
-attackerRow := report.Row{Signal: model.Signal{User: "unknown@throwaway.example"}, Decision: attackerD}
+fixedClock := func() time.Time { return time.Date(2026, 1, 15, 3, 14, 0, 0, time.UTC) } // §7's ts
 
-happyD := model.Decision{Action: model.Allow,
-	Reasons: []string{"P11: all signals clean — explicit allow"},
-	Pillars: []string{"identity"}, Matched: []string{"P11"}}
-happyRow := report.Row{Signal: model.Signal{User: "alice@contoso.com"}, Decision: happyD}
-
-byodD := model.Decision{Action: model.Limited, Scope: "read-only",
-	Reasons: []string{"P04: unmanaged device — least-privilege grant"},
-	Pillars: []string{"devices"}, Matched: []string{"P04"}}
+auditSignal := model.Signal{Timestamp: time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC), User: "attacker@x"}
+auditDecision := model.Decision{Action: model.Block,
+	Reasons: []string{"P01: no second factor presented — verify explicitly"},
+	Pillars: []string{"identity"}, Matched: []string{"P01"}}
 ```
 
-Signal JSON for the main tests (the T4.1 `signalJSON` + the
-`TestPack_ScenarioShapes` pins as JSON — copy verbatim):
+The exact-line literal for T6.1 (auditSignal + auditDecision through the writer —
+generate once with a scratch marshal and paste; from then on it's pinned):
 
-```json
-happy    = {"timestamp":"2026-01-15T10:00:00Z","user":"alice@contoso.com","role":"finance","app":"intranet-wiki","dataSensitivity":"internal","location":"US","unfamiliarLocation":false,"deviceManaged":true,"deviceCompliant":true,"localHour":10,"mfaPresent":true,"riskScore":15}
-byod     = happy with "deviceManaged":false,"deviceCompliant":false
-stolen   = happy with "deviceManaged":false,"deviceCompliant":false,"mfaPresent":false,"riskScore":45
-attacker = {"timestamp":"2026-01-15T10:00:00Z","user":"unknown@throwaway.example","role":"guest","app":"payroll-app","dataSensitivity":"high","location":"NG","unfamiliarLocation":true,"deviceManaged":false,"deviceCompliant":false,"localHour":2,"mfaPresent":false,"riskScore":85}
+```
+{"ts":"2026-01-15T03:14:00Z","cmd":"decide","source":"attacker.json","signal":{"timestamp":"2026-01-15T10:00:00Z","user":"attacker@x","role":"","app":"","dataSensitivity":"","location":"","unfamiliarLocation":false,"deviceManaged":false,"deviceCompliant":false,"localHour":0,"mfaPresent":false,"riskScore":0},"action":"block","scope":"","reasons":["P01: no second factor presented — verify explicitly"],"pillars":["identity"],"matched":["P01"]}
 ```
 
-Main-test helpers (test file only): `writeFile(t, content string) string`
-(t.TempDir + one file, returns path), `runCLI(t, args, stdin string) (exit int,
-stdout, stderr string)` wrapping `run` with bytes buffers.
+Signal JSON fixtures for main tests: the Phase 5 `happy/byod/stolen/attacker` strings
+(copy verbatim from `main_test.go` — no re-typing). Main-test helpers reused:
+`writeFile(t, content) string`, `runCLI(t, args, stdin) (exit, stdout, stderr)`.
 
-## T5.1 — report: decisions table + JSON
+## T6.1 — report: AuditWriter
 
-### TestReport_DecisionsTable (happy path + structure)
-- Target: `internal/report`, `TestReport_DecisionsTable`
-- Shape: table-driven over rows; `want` = substrings + structural line counts
-  (assert on `strings.Split(out, "\n")` — trimmed lines, so tabwriter widths
-  stay free). Red because: no non-test Go files in `internal/report` → build
-  fails (`no non-test Go files in …/internal/report` — the T3.1/T4.1 precedent red)
-- Run: `go test ./internal/report/ -run TestReport_DecisionsTable -count=1 -v`
-
-| name | give rows | want |
-|---|---|---|
-| attacker row | [attackerRow] | header line `USER ACTION REASONS` fields present; `unknown@throwaway.example` + `BLOCK` on the row line; each of the 3 full reasons on its own line; footer line `pillars: identity, devices, data, applications`; total lines = 5 (header + 3 reasons + footer) |
-| allow row | [happyRow] | `alice@contoso.com` + `ALLOW`; `P11: all signals clean — explicit allow`; footer `pillars: identity`; 3 lines |
-| two rows, pillar union | [happyRow, attackerRow] | alice line before unknown line (input order); footer exactly `pillars: identity, devices, data, applications` (each pillar once) |
-| reasons stack, not joined | [attackerRow] | trimmed line 2 == reason[1], trimmed line 3 == reason[2] (no `; `-joined one-liner regression) |
-| action text is uppercased | [byodRow] | `LIMITED` (not `limited`); note: NO scope column — `read-only` absent from table (scope rides in JSON) |
-
-### TestReport_DecisionsJSON
-- Target: same file, `TestReport_DecisionsJSON`
-- Shape: table-driven; round-trip via `json.Unmarshal` into `[]model.Decision`
-  plus one text substring each (indented encoder output)
-- Run: `go test ./internal/report/ -run TestReport_DecisionsJSON -count=1 -v`
+### TestAuditWriter
+- Target: `internal/report`, `TestAuditWriter` (package `report_test`)
+- Shape: subtests (real files in `t.TempDir()` — O_APPEND is a real-fs behavior,
+  fakes would prove nothing)
+- Red because: `report.NewAuditWriter` undefined → compile error
+- Run: `go test ./internal/report/ -run TestAuditWriter -count=1 -v`
 
 | name | give | want |
 |---|---|---|
-| single decision | [attackerD] | round-trips equal (len 1, all fields); text contains `"action": "block"` |
-| limited keeps scope | [byodD] | round-trips equal; text contains `"scope": "read-only"` |
-| two decisions in order | [happyD, byodD] | len 2; [0].Action == Allow, [1].Action == Limited |
+| record is one JSON line in §7 field order | Append("decide", "attacker.json", auditSignal, auditDecision) | file content == exact literal above + `"\n"` (byte-compare) |
+| ts is the injected clock, not marshal time | fixedClock | literal's `"ts":"2026-01-15T03:14:00Z"` — no wall-clock leak |
+| O_CREATE: missing file is created | path inside empty t.TempDir() | no error; file exists |
+| limited scope flattens top-level | Decision{Limited, Scope: "read-only"} | line contains `"action":"limited","scope":"read-only"` before `"reasons"` |
+| reopen appends, never truncates: line 1 byte-identical | writer1: Append+Close; read; writer2 (new open, same path): Append(different user)+Close; read | 2 lines; line 1 == first read byte-for-byte; line 2 decodes to the new user |
+| append after Close fails | writer.Close(); Append again | error (write on closed file — surfaced, not ignored) |
 
-## T5.2 — `decide`
+## T6.2 — `--audit` on decide + run
 
-### TestDecodeSignals (model)
-- Target: `internal/model`, `TestDecodeSignals` (appended to `model_test.go`)
-- Shape: table-driven over JSON strings; `want` = error substring or decoded
-  spot checks. Red because: `model.DecodeSignals` undefined → compile error
-- Run: `go test ./internal/model/ -run TestDecodeSignals -count=1 -v`
+### TestRun_DecideAudit (main)
+- Target: `main`, `TestRun_DecideAudit`
+- Shape: table-driven; audit paths via `writeFile`-style temp paths
+- Red because: behavioral — `--audit` isn't a defined flag, fs.Parse fails → run
+  returns 64 where 0–3 is wanted
+- Run: `go test . -run TestRun_DecideAudit -count=1 -v`
 
-| name | give | want |
-|---|---|---|
-| two valid signals | `[happy, attacker]` | len 2; [0].User alice…, [1].RiskScore 85; nil error |
-| unknown field in element | happy + `,"risk":9` | `unknown field "risk"` |
-| element fails validation | happy with `"user":""` | `user must not be empty` |
-| single object, not array | happy alone (no `[ ]`) | `[]model.Signal` (cannot-unmarshal-object) |
-| §6 scenario pack rejected | `{"name":"x","cases":[]}` | `[]model.Signal` — §5's "packs are rejected in decide" rule, proven at the decoder |
-| empty array | `[]` | `empty signals array` |
-| null | `null` | `empty signals array` |
-
-### TestRun_Decide (main)
-- Target: `main`, `TestRun_Decide` (package main; `run` now takes stdin)
-- Shape: table-driven; fixtures via `writeFile`; stdin fed as a string (ignored
-  unless `--stdin`). Red because: behavioral — decide is still the exit-70 stub
-- Run: `go test . -run TestRun_Decide -count=1 -v`
-
-| name | args / stdin | wantExit | stdout contains | stderr contains |
-|---|---|---|---|---|
-| happy file allows | `decide <happy.json>` | 0 | `USER`, `ALLOW`, `P11: all signals clean — explicit allow`, `pillars: identity` | — |
-| byod file limits | `decide <byod.json>` | 1 | `LIMITED` | — |
-| stolen file steps up | `decide <stolen.json>` | 2 | `STEPUPMFA` | — |
-| attacker file blocks | `decide <attacker.json>` | 3 | `BLOCK`, `P07: risk score above hard threshold`, `pillars: identity, devices, data, applications` | — |
-| mixed file takes strictest | `decide <[happy,attacker].json>` | 3 | both `alice@contoso.com` and `unknown@throwaway.example`; exactly 1 header line | — |
-| stdin single signal | `decide --stdin` / happy | 0 | `ALLOW` | — |
-| stdin invalid object | `decide --stdin` / happy + `,"risk":9` | 65 | — | `unknown field "risk"` |
-| missing file | `decide /nope/x.json` | 65 | — | `no such file` |
-| pack fed to decide | `decide scenarios/attacker.json` | 65 | — | `[]model.Signal` |
-| invalid signal in array | file `[happy with riskScore 9000]` | 65 | — | `riskScore` |
-| no input source | `decide` | 64 | — | usage |
-| stdin AND file | `decide --stdin <happy.json>` | 64 | — | usage |
-| unknown flag | `decide --wat x` | 64 | — | usage |
-| bad format value | `decide --format yaml <happy.json>` | 64 | — | usage |
-
-Also `TestRun_DecideFormatJSON`: `decide --format json <attacker.json>` → exit 3,
-stdout round-trips via `json.Unmarshal` to 1 decision with Action Block, Scope "",
-len(Matched) 7. And `TestRun_Dispatch` edits: delete the "decide is stubbed" row;
-all remaining rows call `run` with the new stdin arg (pass `strings.NewReader("")`).
-
-## T5.3 — `run`
-
-### TestReport_PackSummary
-- Target: `internal/report`, `TestReport_PackSummary`
-- Shape: one table-driven case with three results
-  (`{happy,1,1,0,Allow}`, `{attacker,1,1,0,Block}`, `{mixed,2,1,1,Limited}`)
-- Red because: `report.PackSummary`/`PackResult` undefined → compile error
-- Run: `go test ./internal/report/ -run TestReport_PackSummary -count=1 -v`
-
-| want | |
-|---|---|
-| header fields | `PACK CASES PASS FAIL STRICTEST` present |
-| row order | happy row before attacker row before mixed row (input order) |
-| cells | `1 1 0 ALLOW` on happy's row; `2 1 1 LIMITED` on mixed's row (trimmed) |
-
-### TestRun_Run (main)
-- Target: `main`, `TestRun_Run`
-- Shape: table-driven; failing/corrupt packs via `writeFile` in a temp dir;
-  the real `scenarios/` dir is used for the all-pass row (tests run at project root)
-- Red because: behavioral — run is still the exit-70 stub
-- Run: `go test . -run TestRun_Run -count=1 -v`
-
-| name | give | wantExit | output |
+| name | args | wantExit | want |
 |---|---|---|---|
-| scenarios dir all pass | `run scenarios` | 0 | six `PASS <name>/` lines (one per pack; `FAIL` absent); summary header `PACK`; rows for all six pack names |
-| failing expectation | temp pack: happy signal, `expect.action block` | 1 | `FAIL <pack>/<case>: want action block, got allow`; summary shows FAIL 1 |
-| corrupt pack aborts | temp dir: `not json` file | 65 | stderr names the file path |
-| missing dir | `run ./nope` | 65 | stderr `no such file` |
-| dir with no packs | empty temp dir | 65 | stderr `no scenario packs` |
-| no args | `run` | 64 | usage |
-| two args | `run a b` | 64 | usage |
+| one record per signal, exit still strictest | `decide --audit <f> <[byod,attacker].json>` | 3 | 2 lines; line 1: cmd decide, source = the path, action limited; line 2: action block (read via `report.ReadAudit` or a strict unmarshal) |
+| stdin records source "stdin" | `decide --stdin --audit <f>` / happy | 0 | 1 record, Source "stdin", Cmd "decide" |
+| footer line per §5 | `decide --audit <f> <attacker.json>` | 3 | stdout contains `audit: 7 policies matched, decision appended to <f>` |
+| no --audit → no footer, no file | `decide <attacker.json>` | 3 | stdout lacks `audit: `; no file created |
+| unwritable audit path → 65 | `--audit <tempdir>/no/x.jsonl` | 65 | stderr names the path |
+| bad input never creates the audit file | `decide --audit <f> scenarios/attacker.json` | 65 | `<f>` does not exist after the run |
 
-`TestRun_Dispatch`: delete the "run is stubbed" row.
+### TestRun_RunAudit (main)
+- Target: `main`, `TestRun_RunAudit`
+- Shape: table-driven; one temp dir with a 2-case pack (happy + byod signals,
+  expectations per the Phase 5 `writeFile` pack format)
+- Red because: behavioral — run has no `--audit` flag → 64
+- Run: `go test . -run TestRun_RunAudit -count=1 -v`
 
-## T5.4 — `policies`
+| name | args | wantExit | want |
+|---|---|---|---|
+| one record per case, source = pack path, cmd = run | `run --audit <f> <tmpdir>` | 0 | 2 records; each Source == `filepath.Join(dir, packfile)`, Cmd "run" |
+| footer after summary | same | 0 | stdout contains `audit: 2 policies matched, decision appended to <f>` after the PACK table |
+| append failure → 65, beats pass/fail | `run --audit <tempdir>/no/x.jsonl <tmpdir>` | 65 | stderr names the path |
 
-### TestReport_Policies
-- Target: `internal/report`, `TestReport_Policies`
-- Shape: table-driven over a two-policy literal slice
-  (P01-shaped `{ID:"P01",Priority:10,Pillar:"identity",Then:StepUpMFA,Note:"no second factor presented — verify explicitly"}`
-  + P04-shaped `{ID:"P04",Priority:30,Pillar:"devices",Then:Limited,Scope:"read-only",Note:"unmanaged device — least-privilege grant"}`)
-- Red because: `report.Policies` undefined → compile error
-- Run: `go test ./internal/report/ -run TestReport_Policies -count=1 -v`
+## T6.3 — `audit` subcommand: reader + counts
+
+### TestReadAudit (report)
+- Target: `internal/report`, `TestReadAudit`
+- Shape: table-driven over reader contents (strings.NewReader)
+- Red because: `report.ReadAudit` undefined → compile error
+- Run: `go test ./internal/report/ -run TestReadAudit -count=1 -v`
 
 | name | give | want |
 |---|---|---|
-| two policies | the slice above | header `ID PRIORITY PILLAR ACTION NOTE`; P01 row: `10`, `identity`, `STEPUPMFA`, full note; P04 row before-order after P01 (input order); **no SCOPE column** — `read-only` absent from output |
+| valid log decodes fully | exact literal line ×2 (second with user b) | 2 records; fields round-trip (TS, Cmd, Source, Signal.User, Action, Matched); 0 errs |
+| corrupt JSON reported with line number | valid + `{oops` | 1 record; errs[0] contains `line 2` |
+| unknown field is corrupt | valid line + `,"foo":1` inside | errs (DisallowUnknownFields), line 1 |
+| unknown action text is corrupt | `"action":"detonate"` | errs — `Action.UnmarshalText` refuses at decode |
+| bad ts is corrupt | `"ts":"yesterday"` | errs — RFC 3339 enforced by `time.Time` decode |
+| blank line is corrupt | valid + `` + valid | 2 records; errs[0] `line 2` |
+| truncated last line (no trailing \n) still seen | valid + `{"ts":"2026-` | 1 record; errs[0] `line 2` |
+| empty reader | `` | 0 records, 0 errs |
 
-### TestRun_Policies (main)
-- Target: `main`, `TestRun_Policies`
-- Shape: table-driven; red because behavioral (exit-70 stub)
-- Run: `go test . -run TestRun_Policies -count=1 -v`
+### TestAuditSummary (report)
+- Target: `internal/report`, `TestAuditSummary`
+- Shape: table-driven over hand-built records
+- Red because: `report.AuditSummary` undefined → compile error
+- Run: `go test ./internal/report/ -run TestAuditSummary -count=1 -v`
 
-| name | args | wantExit | stdout contains |
+| name | give | want |
+|---|---|---|
+| counts in §2 severity order | allow + limited + stepUpMFA + block + block | `counts: allow=1 limited=1 stepUpMFA=1 block=2\n` (exact) |
+| empty log | none | `counts: allow=0 limited=0 stepUpMFA=0 block=0\n` |
+
+### TestRun_Audit (main)
+- Target: `main`, `TestRun_Audit`
+- Shape: table-driven; valid logs produced by a decide `--audit` run first
+- Red because: behavioral — audit is still the exit-70 stub
+- Run: `go test . -run TestRun_Audit -count=1 -v`
+
+| name | give | wantExit | want |
 |---|---|---|---|
-| lists the pack | `policies` | 0 | header; all of `P01`…`P11` (11 IDs, count them); `identity`, `devices`, `data`, `applications` pillars; `all signals clean — explicit allow` note |
-| extra arg | `policies x` | 64 | usage |
+| reprints decisions + counts | decide --audit (attacker) → `audit <f>` | 0 | stdout: USER/ACTION/REASONS table with BLOCK + `P01: …` line, pillars footer, `counts: allow=0 limited=0 stepUpMFA=0 block=1` |
+| empty log is valid | `audit <empty file>` | 0 | counts all-zero; no table (no empty pillars footer) |
+| corrupt line reported, valid still printed | 1 valid + `garbage\n` | 65 | valid row printed; stderr contains `line 2` |
+| unreadable file | `audit /nope/x.jsonl` | 65 | stderr `no such file` |
+| usage | `audit` · `audit a b` | 64 · 64 | auditUsage |
 
-`TestRun_Dispatch`: delete the "policies is stubbed" row.
+`TestRun_Dispatch`: delete the "audit is stubbed" row.
+`TestRun_ExitCodes`: audit-70 row → `audit <valid>` 0 · `audit` 64 · `audit /nope` 65 ·
+`audit <corrupt>` 65.
 
-## T5.5 — exit-code sweep + demo fixture (expected 0 red — T1.5/T2.4/T3.3/T4.3 precedent)
+## T6.4 — append-only + corruption sweep (expected 0 red — T1.5/T2.4/T3.3/T4.3/T5.5 precedent)
 
-### TestRun_ExitCodes (main)
-- Target: `main`, `TestRun_ExitCodes`
-- Shape: one table locking §5's exit-code map; decide fixtures built in a temp
-  dir (happy/byod/stolen/attacker single-signal files). A red here is a wiring
-  bug in T5.2–T5.4 — fix the root cause, never the matrix
-- Run: `go test . -run TestRun_ExitCodes -count=1 -v`
+### TestRun_AuditAppendOnly + TestRun_AuditTruncated (main)
+- Target: `main`
+- Shape: two focused tests against the finished T6.1–T6.3 wiring; a red is a wiring
+  bug — fix the root cause, never the test
+- Run: `go test . -run 'TestRun_Audit' -count=1 -v`
 
-| command | wantExit |
-|---|---|
-| `decide <happy>` / `decide <byod>` / `decide <stolen>` / `decide <attacker>` | 0 / 1 / 2 / 3 |
-| `decide` (no input) · `decide --format yaml <happy>` | 64 · 64 |
-| `decide scenarios/attacker.json` (§5 pack-rejection rule) · `decide /nope` | 65 · 65 |
-| `run scenarios` · `run <temp failing pack>` | 0 · 1 |
-| `run` (no args) · `run ./nope` | 64 · 65 |
-| `policies` · `policies x` | 0 · 64 |
-| `audit` (still the Phase 6 stub — keeps the map complete) | 70 |
-| `--version` | 0 |
+| name | give | want |
+|---|---|---|
+| re-running decide never mutates old lines | runCLI decide happy --audit f; read line1; runCLI decide attacker --audit f; read | exit 0 then 3; 2 lines; line 1 byte-identical across runs (§10 done-when) |
+| truncated log detected via CLI | decide --audit f; append `{"ts":"2026-` (no \n) to f; runCLI audit f | exit 65; stderr `line 2` |
 
-Then: create `examples/attacker-signals.json` (copy the `signal` object from
-`scenarios/attacker.json` verbatim into `[ ]`), tick spec §10 Phase 5 boxes, and
-record the demo session in the run log:
+Then: `.gitignore` += `audit.jsonl`; demo session recorded in the run log:
 
 ```
-make build && ./zt-sim decide examples/attacker-signals.json ; echo $?
-# USER/ACTION/REASONS table, 7 reasons (P01 P02 P03 P04 P06 P07 P10),
-# footer "pillars: identity, devices, data, applications", exit 3
-./zt-sim run scenarios/ && echo $?   # six PASS lines + PACK summary, exit 0
+make build
+./zt-sim decide examples/attacker-signals.json --audit audit.jsonl ; echo $?   # 3; footer: audit: 7 policies matched, decision appended to audit.jsonl
+./zt-sim decide examples/attacker-signals.json --audit audit.jsonl ; echo $?   # 3; audit.jsonl now 2 lines, line 1 unchanged
+./zt-sim audit audit.jsonl ; echo $?                                          # 0; table + pillars + counts: allow=0 … block=2
+printf 'garbage\n' >> audit.jsonl && ./zt-sim audit audit.jsonl ; echo $?     # 65; line 3 reported
+rm -f audit.jsonl
 ```
+
+Tick spec §10 Phase 6 boxes.
+
+---
+
+# Phase 5 — CLI (complete, archived)
+
+Test files: `internal/report/report_test.go` (package `report_test`),
+`internal/model/model_test.go` (+`TestDecodeSignals`), `main_test.go`. Named tests:
+`TestReport_DecisionsTable`, `TestReport_DecisionsJSON`, `TestDecodeSignals`,
+`TestRun_Decide`, `TestRun_DecideFormatJSON`, `TestReport_PackSummary`,
+`TestRun_Run`, `TestReport_Policies`, `TestRun_Policies`, `TestRun_ExitCodes`
+(16-row §5 matrix). Key pins still in force: tabwriter tables assert trimmed lines
+not widths; `run` takes stdin as param 2; PASS/FAIL asserted per-line (HasPrefix),
+header cells excluded; decide exit = strictest action as int. Full case tables:
+git history / `plans/pr-phase5.md`.
 
 ---
 
@@ -335,7 +276,8 @@ Run: `go test ./internal/model/ -count=1`. Full case tables: git history /
 - `TestRun_Dispatch` (package `main`, white-box — `run` is unexported): version → 0 +
   `zt-sim version 0.1.0\n`; no args / unknown subcommand → 64 + usage on stderr; four
   subcommand stubs → 70 + `not implemented yet`. Exit codes are the CLI's real API —
-  asserted exactly. (Phase 5 replaces the stub rows as each subcommand lands.)
+  asserted exactly. (Phase 5 replaced the stub rows as each subcommand landed; the
+  audit row survives until Phase 6 T6.3.)
 
 ## T3 — Makefile
 - Test: none. `make test` re-runs T2's suite. Acceptance: `make build &&
