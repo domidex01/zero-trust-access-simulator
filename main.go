@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"zt-sim/internal/engine"
 	"zt-sim/internal/model"
@@ -26,14 +27,15 @@ commands:
   policies                list loaded policies
   audit <audit.jsonl>     print + validate an audit log
 
-flags on decide:
+flags on decide/run:
+  --audit <file>          append decisions to an append-only JSONL audit log
   --format table|json     output format (default table)
 
 global:
   --version               print version and exit
 `
 
-const decideUsage = "usage: zt-sim decide [--stdin] [--format table|json] <signals.json>"
+const decideUsage = "usage: zt-sim decide [--stdin] [--format table|json] [--audit <file>] <signals.json>"
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
@@ -69,6 +71,7 @@ func cmdDecide(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs.Usage = func() { fmt.Fprintln(stderr, decideUsage) }
 	useStdin := fs.Bool("stdin", false, "read one signal object from stdin")
 	format := fs.String("format", "table", "output format: table|json")
+	auditPath := fs.String("audit", "", "append decisions to this JSONL audit log")
 	if err := fs.Parse(args); err != nil {
 		return 64
 	}
@@ -85,6 +88,7 @@ func cmdDecide(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	var signals []model.Signal
+	source := "stdin"
 	if *useStdin {
 		s, err := model.DecodeSignal(stdin)
 		if err != nil {
@@ -104,6 +108,19 @@ func cmdDecide(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "decide: %s: %v\n", rest[0], err)
 			return 65
 		}
+		source = rest[0]
+	}
+
+	// input is validated — safe to open the audit file (a bad input must
+	// never create one)
+	var aw *report.AuditWriter
+	if *auditPath != "" {
+		w, err := report.NewAuditWriter(*auditPath, time.Now)
+		if err != nil {
+			fmt.Fprintf(stderr, "decide: %v\n", err)
+			return 65
+		}
+		aw = w
 	}
 
 	e := engine.New(policies.Pack())
@@ -117,6 +134,22 @@ func cmdDecide(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		strictest = max(strictest, d.Action)
 	}
 
+	matched := 0
+	if aw != nil {
+		for i, d := range decisions {
+			if err := aw.Append("decide", source, signals[i], d); err != nil {
+				aw.Close()
+				fmt.Fprintf(stderr, "decide: %v\n", err)
+				return 65
+			}
+			matched += len(d.Matched)
+		}
+		if err := aw.Close(); err != nil {
+			fmt.Fprintf(stderr, "decide: %v\n", err)
+			return 65
+		}
+	}
+
 	var err error
 	if *format == "json" {
 		err = report.DecisionsJSON(stdout, decisions)
@@ -127,30 +160,50 @@ func cmdDecide(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "decide: %v\n", err)
 		return 65
 	}
+	if aw != nil {
+		auditFooter(stdout, matched, *auditPath)
+	}
 	return int(strictest) // §2: the severity doubles as the exit code
+}
+
+// auditFooter prints §5's session footer after the tables.
+// shortcut: "decision" stays singular for N>1 appended records; reword
+// when a consumer of the footer cares
+func auditFooter(w io.Writer, matched int, path string) {
+	fmt.Fprintf(w, "audit: %d policies matched, decision appended to %s\n", matched, path)
 }
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-const runUsage = "usage: zt-sim run <scenarios-dir>"
+const runUsage = "usage: zt-sim run [--audit <file>] <scenarios-dir>"
 
 // cmdRun loads every *.json pack in dir, checks each case's expectation
 // against the real pack, prints per-case lines and the summary table.
-// Exit 0 all pass, 1 any failure, 65 unreadable/invalid pack.
+// Exit 0 all pass, 1 any failure, 64 usage, 65 unreadable/invalid pack or
+// audit failure (§5: 65 beats 0/1).
 func cmdRun(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 1 {
+	fs := flag.NewFlagSet("run", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.Usage = func() { fmt.Fprintln(stderr, runUsage) }
+	auditPath := fs.String("audit", "", "append decisions to this JSONL audit log")
+	if err := fs.Parse(args); err != nil {
+		return 64
+	}
+	rest := fs.Args()
+	if len(rest) != 1 {
 		fmt.Fprintln(stderr, runUsage)
 		return 64
 	}
-	dir := args[0]
+	dir := rest[0]
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		fmt.Fprintf(stderr, "run: %v\n", err)
 		return 65
 	}
 	var packs []scenario.Pack
+	var sources []string // pack file path, parallel to packs (audit source)
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
@@ -161,19 +214,39 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 			return 65
 		}
 		packs = append(packs, p)
+		sources = append(sources, filepath.Join(dir, e.Name()))
 	}
 	if len(packs) == 0 {
 		fmt.Fprintf(stderr, "run: no scenario packs in %s\n", dir)
 		return 65
 	}
 
+	var aw *report.AuditWriter
+	if *auditPath != "" {
+		w, err := report.NewAuditWriter(*auditPath, time.Now)
+		if err != nil {
+			fmt.Fprintf(stderr, "run: %v\n", err)
+			return 65
+		}
+		aw = w
+	}
+
 	eng := engine.New(policies.Pack())
 	var results []report.PackResult
 	failed := false
-	for _, p := range packs {
+	matched := 0
+	for i, p := range packs {
 		res := report.PackResult{Name: p.Name, Strictest: model.Allow}
 		for _, c := range p.Cases {
 			d := eng.Evaluate(c.Signal)
+			if aw != nil {
+				if err := aw.Append("run", sources[i], c.Signal, d); err != nil {
+					aw.Close()
+					fmt.Fprintf(stderr, "run: %v\n", err)
+					return 65
+				}
+				matched += len(d.Matched)
+			}
 			res.Cases++
 			res.Strictest = max(res.Strictest, d.Action)
 			if err := c.Check(d); err != nil {
@@ -190,6 +263,13 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	if err := report.PackSummary(stdout, results); err != nil {
 		fmt.Fprintf(stderr, "run: %v\n", err)
 		return 65
+	}
+	if aw != nil {
+		if err := aw.Close(); err != nil {
+			fmt.Fprintf(stderr, "run: %v\n", err)
+			return 65
+		}
+		auditFooter(stdout, matched, *auditPath)
 	}
 	if failed {
 		return 1

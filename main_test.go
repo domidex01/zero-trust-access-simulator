@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"zt-sim/internal/model"
+	"zt-sim/internal/report"
 	"zt-sim/internal/scenario"
 )
 
@@ -353,6 +354,201 @@ func TestRun_Policies(t *testing.T) {
 
 // TestRun_ExitCodes locks §5's exit-code map end to end. A red here is a
 // wiring bug in T5.2–T5.4, not a matrix problem — fix the cause, not the row.
+// auditRun writes content to a fixture file, substitutes @file and @audit
+// (a fresh temp audit path), runs, and returns exit, stdout, stderr, auditPath.
+func auditRun(t *testing.T, content string, args []string, stdin string) (int, string, string, string) {
+	t.Helper()
+	path := writeFile(t, content)
+	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
+	for i, a := range args {
+		switch a {
+		case "@file":
+			args[i] = path
+		case "@audit":
+			args[i] = auditPath
+		}
+	}
+	var stdout, stderr bytes.Buffer
+	exit := run(args, strings.NewReader(stdin), &stdout, &stderr)
+	return exit, stdout.String(), stderr.String(), auditPath
+}
+
+// records decodes the audit file's lines into records (T6.2 needs no reader —
+// plain unmarshal; ReadAudit lands in T6.3).
+func records(t *testing.T, path string) []report.AuditRecord {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read audit file: %v", err)
+	}
+	var recs []report.AuditRecord
+	for _, line := range strings.Split(strings.TrimSuffix(string(b), "\n"), "\n") {
+		var r report.AuditRecord
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			t.Fatalf("decode audit line %q: %v", line, err)
+		}
+		recs = append(recs, r)
+	}
+	return recs
+}
+
+func TestRun_DecideAudit(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		args     []string
+		stdin    string
+		wantExit int
+		wantOut  []string
+		wantErr  []string
+		notOut   []string // stdout must NOT contain these
+		verify   func(t *testing.T, auditPath, out, errOut string)
+	}{
+		{
+			name:    "one record per signal, exit still strictest",
+			content: "[" + byodSignal + "," + attackerSignal + "]",
+			args:    []string{"decide", "--audit", "@audit", "@file"}, wantExit: 3,
+			verify: func(t *testing.T, auditPath, _, _ string) {
+				recs := records(t, auditPath)
+				if len(recs) != 2 {
+					t.Fatalf("want 2 records, got %d", len(recs))
+				}
+				if recs[0].Cmd != "decide" || recs[0].Action != model.Limited {
+					t.Errorf("record 1 = cmd %q action %v, want decide/limited", recs[0].Cmd, recs[0].Action)
+				}
+				if recs[0].Source == "" || !strings.HasSuffix(recs[0].Source, "in.json") {
+					t.Errorf("record 1 source = %q, want the input path as given", recs[0].Source)
+				}
+				if recs[1].Action != model.Block {
+					t.Errorf("record 2 action = %v, want block", recs[1].Action)
+				}
+			},
+		},
+		{
+			name: "stdin records source stdin", content: "ignored",
+			args: []string{"decide", "--stdin", "--audit", "@audit"}, stdin: happySignal, wantExit: 0,
+			verify: func(t *testing.T, auditPath, _, _ string) {
+				recs := records(t, auditPath)
+				if len(recs) != 1 || recs[0].Source != "stdin" || recs[0].Cmd != "decide" {
+					t.Fatalf("record = %+v, want cmd decide source stdin", recs)
+				}
+			},
+		},
+		{
+			name: "footer line per §5", content: "[" + attackerSignal + "]",
+			args: []string{"decide", "--audit", "@audit", "@file"}, wantExit: 3,
+			verify: func(t *testing.T, auditPath, out, _ string) {
+				want := "audit: 7 policies matched, decision appended to " + auditPath
+				if !strings.Contains(out, want) {
+					t.Errorf("stdout %q does not contain %q", out, want)
+				}
+			},
+		},
+		{
+			name: "no --audit means no footer and no file", content: "[" + attackerSignal + "]",
+			args: []string{"decide", "@file"}, wantExit: 3,
+			notOut: []string{"audit: "},
+		},
+		{
+			name: "unwritable audit path exits 65", content: "[" + happySignal + "]",
+			args: []string{"decide", "--audit", filepath.Join(t.TempDir(), "no", "x.jsonl"), "@file"}, wantExit: 65,
+			verify: func(t *testing.T, _, _, errOut string) {
+				if !strings.Contains(errOut, "x.jsonl") {
+					t.Errorf("stderr %q must name the audit path", errOut)
+				}
+			},
+		},
+		{
+			name: "bad input never creates the audit file", content: "not a signals array",
+			args: []string{"decide", "--audit", "@audit", "@file"}, wantExit: 65,
+			verify: func(t *testing.T, auditPath, _, _ string) {
+				if _, err := os.Stat(auditPath); !os.IsNotExist(err) {
+					t.Errorf("audit file must not exist after bad input, stat err = %v", err)
+				}
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			exit, out, errOut, auditPath := auditRun(t, tc.content, tc.args, tc.stdin)
+			if exit != tc.wantExit {
+				t.Errorf("exit = %d, want %d\nstdout:\n%s\nstderr:\n%s", exit, tc.wantExit, out, errOut)
+			}
+			for _, want := range tc.wantOut {
+				if !strings.Contains(out, want) {
+					t.Errorf("stdout %q does not contain %q", out, want)
+				}
+			}
+			for _, want := range tc.wantErr {
+				if !strings.Contains(errOut, want) {
+					t.Errorf("stderr %q does not contain %q", errOut, want)
+				}
+			}
+			for _, unwanted := range tc.notOut {
+				if strings.Contains(out, unwanted) {
+					t.Errorf("stdout %q must not contain %q", out, unwanted)
+				}
+			}
+			if tc.verify != nil {
+				tc.verify(t, auditPath, out, errOut)
+			}
+		})
+	}
+}
+
+func TestRun_RunAudit(t *testing.T) {
+	twoCases := writePack(t, `{"name":"twopack","cases":[
+		{"name":"ok","signal":`+happySignal+`,"expect":{"action":"allow"}},
+		{"name":"byod","signal":`+byodSignal+`,"expect":{"action":"limited","scope":"read-only"}}]}`)
+	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
+
+	t.Run("one record per case, source is the pack path, cmd is run", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		exit := run([]string{"run", "--audit", auditPath, twoCases}, strings.NewReader(""), &stdout, &stderr)
+		if exit != 0 {
+			t.Fatalf("exit = %d, want 0\nstderr:\n%s", exit, stderr.String())
+		}
+		recs := records(t, auditPath)
+		if len(recs) != 2 {
+			t.Fatalf("want 2 records, got %d", len(recs))
+		}
+		wantSrc := filepath.Join(twoCases, "pack.json")
+		for i, r := range recs {
+			if r.Cmd != "run" || r.Source != wantSrc {
+				t.Errorf("record %d = cmd %q source %q, want run/%q", i, r.Cmd, r.Source, wantSrc)
+			}
+		}
+	})
+
+	t.Run("footer after summary", func(t *testing.T) {
+		p2 := filepath.Join(t.TempDir(), "audit2.jsonl")
+		var stdout, stderr bytes.Buffer
+		exit := run([]string{"run", "--audit", p2, twoCases}, strings.NewReader(""), &stdout, &stderr)
+		if exit != 0 {
+			t.Fatalf("exit = %d, want 0", exit)
+		}
+		wantFooter := "audit: 2 policies matched, decision appended to " + p2
+		if !strings.Contains(stdout.String(), wantFooter) {
+			t.Errorf("stdout %q does not contain %q", stdout.String(), wantFooter)
+		}
+		if strings.Index(stdout.String(), "PACK") > strings.Index(stdout.String(), wantFooter) {
+			t.Errorf("footer must come after the PACK summary:\n%s", stdout.String())
+		}
+	})
+
+	t.Run("append failure exits 65", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		bad := filepath.Join(t.TempDir(), "no", "x.jsonl")
+		exit := run([]string{"run", "--audit", bad, twoCases}, strings.NewReader(""), &stdout, &stderr)
+		if exit != 65 {
+			t.Errorf("exit = %d, want 65\nstderr:\n%s", exit, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "x.jsonl") {
+			t.Errorf("stderr %q must name the audit path", stderr.String())
+		}
+	})
+}
+
 func TestRun_ExitCodes(t *testing.T) {
 	happy := writeFile(t, "["+happySignal+"]")
 	byod := writeFile(t, "["+byodSignal+"]")

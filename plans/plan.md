@@ -35,7 +35,7 @@
 ## Status
 Phase 6:
 - [x] T6.1 `internal/report`: `AuditRecord` + `AuditWriter` — `O_APPEND|O_CREATE|O_WRONLY`, one JSON line per decision, `ts` = injected write clock
-- [ ] T6.2 Wire `--audit` into `decide` and `run` (append per decision, footer, 65 on audit failure)
+- [x] T6.2 Wire `--audit` into `decide` and `run` (append per decision, footer, 65 on audit failure)
 - [ ] T6.3 `audit` subcommand: `ReadAudit` + counts; re-print decisions, corrupt lines reported → exit 65
 - [ ] T6.4 Append-only + corruption sweep at CLI level; demo session with `--audit`; spec §10 ticks
 
@@ -79,6 +79,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - Phase 5 complete — §5 example session satisfied under the documented divergence resolution (examples/ fixture for the illustrative filename; decide scenarios/attacker.json → 65 pinned as the normative rule)
 - review #6 fix ✅ 2026-10-24 — thermonuclear review (APPROVE): 4 findings, all minor, all fixed — cmdDecide's 4× usage pair → one guard switch; strictest int-tracked → model.Action (cast once at return, §2 comment); cmdRun's double-meaning e → eng; +TestExamples_AttackerMatchesPack pinning the demo fixture to its pack (drift guard for T7.3) · rejected with reasons: generic table writer (stringly rows), Row{User string} (less self-describing), DecodeSignal/DecodeSignals unification (different wire shapes), exit-code consts (spec's own vocabulary) · stray working-tree revert of test-plan.md restored from HEAD (uncommitted, no history impact)
 - T6.1 ✅ 2026-10-24 — red: compile error (undefined: report.NewAuditWriter) · green: 1 attempt · 6 subtests · test-side fix: pinned wantLine constant's tail mistyped ("P01"} + "]}), corrected to the scratch-marshaled literal — production output was right · literal generated via scratch marshal (tmp-gen, deleted)
+- T6.2 ✅ 2026-10-24 — red: behavioral (flag provided but not defined: -audit, 8/9 subtests) · green: 1 attempt · 6 + 3 subtests · cmdRun switched to its own FlagSet (usage rows unchanged, exit map preserved) · refactor skipped: audit open/append/close loops differ per command, auditFooter dedupes the shared line
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 6)
