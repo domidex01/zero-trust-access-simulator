@@ -3,8 +3,12 @@
 package report
 
 import (
+	"bufio"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
+	"strings"
 	"time"
 
 	"zt-sim/internal/model"
@@ -52,4 +56,40 @@ func (a *AuditWriter) Append(cmd, source string, s model.Signal, d model.Decisio
 // Close releases the underlying file.
 func (a *AuditWriter) Close() error {
 	return a.f.Close()
+}
+
+// ReadAudit strictly decodes every JSONL line (DisallowUnknownFields);
+// corrupt lines come back as errors carrying their 1-based line number
+// while valid records still decode (§7: reported, not silently skipped).
+// A blank line fails decode and is therefore corrupt.
+func ReadAudit(r io.Reader) (records []AuditRecord, errs []error) {
+	sc := bufio.NewScanner(r)
+	n := 0
+	for sc.Scan() {
+		n++
+		var rec AuditRecord
+		dec := json.NewDecoder(strings.NewReader(sc.Text()))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&rec); err != nil {
+			errs = append(errs, fmt.Errorf("line %d: %v", n, err))
+			continue
+		}
+		records = append(records, rec)
+	}
+	if err := sc.Err(); err != nil {
+		errs = append(errs, fmt.Errorf("read: %v", err))
+	}
+	return records, errs
+}
+
+// AuditSummary writes the counts line — §2 severity order, all four
+// actions always, Action.String names.
+func AuditSummary(w io.Writer, records []AuditRecord) error {
+	var counts [4]int // Action is iota 0..3, decode refuses anything else
+	for _, r := range records {
+		counts[r.Action]++
+	}
+	_, err := fmt.Fprintf(w, "counts: allow=%d limited=%d stepUpMFA=%d block=%d\n",
+		counts[model.Allow], counts[model.Limited], counts[model.StepUpMFA], counts[model.Block])
+	return err
 }

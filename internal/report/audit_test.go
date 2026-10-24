@@ -38,6 +38,85 @@ func readAuditFile(t *testing.T, path string) string {
 	return string(b)
 }
 
+func TestReadAudit(t *testing.T) {
+	bLine := strings.ReplaceAll(wantLine, `"user":"attacker@x"`, `"user":"b@x"`)
+	tests := []struct {
+		name        string
+		give        string
+		wantRecords int
+		wantErrs    []string // substrings errs must contain, in order; nil = no errs
+	}{
+		{"valid log decodes fully", wantLine + "\n" + bLine, 2, nil},
+		{"corrupt JSON reported with line number", wantLine + "\n{oops", 1, []string{"line 2"}},
+		{"unknown field is corrupt", strings.ReplaceAll(wantLine, `"source":"attacker.json"`, `"source":"attacker.json","foo":1`), 0, []string{"line 1: json: unknown field \"foo\""}},
+		{"unknown action text is corrupt", strings.ReplaceAll(wantLine, `"action":"block"`, `"action":"detonate"`), 0, []string{"line 1: unknown action \"detonate\""}},
+		{"bad ts is corrupt", strings.ReplaceAll(wantLine, `"ts":"2026-01-15T03:14:00Z"`, `"ts":"yesterday"`), 0, []string{"line 1"}},
+		{"blank line is corrupt", wantLine + "\n\n" + bLine, 2, []string{"line 2"}},
+		{"truncated last line still seen", wantLine + "\n{" + `"ts":"2026-`, 1, []string{"line 2"}},
+		{"empty reader", "", 0, nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			recs, errs := report.ReadAudit(strings.NewReader(tc.give))
+			if len(recs) != tc.wantRecords {
+				t.Errorf("records = %d, want %d (errs: %v)", len(recs), tc.wantRecords, errs)
+			}
+			if tc.wantErrs == nil {
+				if len(errs) != 0 {
+					t.Errorf("errs = %v, want none", errs)
+				}
+				return
+			}
+			if len(errs) != len(tc.wantErrs) {
+				t.Fatalf("errs = %v, want %d", errs, len(tc.wantErrs))
+			}
+			for i, want := range tc.wantErrs {
+				if !strings.Contains(errs[i].Error(), want) {
+					t.Errorf("errs[%d] = %q, want %q", i, errs[i], want)
+				}
+			}
+		})
+	}
+	t.Run("records round-trip all fields", func(t *testing.T) {
+		recs, errs := report.ReadAudit(strings.NewReader(wantLine + "\n"))
+		if len(errs) != 0 || len(recs) != 1 {
+			t.Fatalf("recs = %d, errs = %v", len(recs), errs)
+		}
+		r := recs[0]
+		if r.TS != fixedClock() || r.Cmd != "decide" || r.Source != "attacker.json" {
+			t.Errorf("header fields = %v %q %q", r.TS, r.Cmd, r.Source)
+		}
+		if r.Signal != auditSignal || r.Action != model.Block || len(r.Matched) != 1 || r.Matched[0] != "P01" {
+			t.Errorf("record did not round-trip: %+v", r)
+		}
+	})
+}
+
+func TestAuditSummary(t *testing.T) {
+	rec := func(a model.Action) report.AuditRecord {
+		return report.AuditRecord{Decision: model.Decision{Action: a}}
+	}
+	tests := []struct {
+		name    string
+		give    []report.AuditRecord
+		wantOut string
+	}{
+		{"counts in §2 severity order", []report.AuditRecord{rec(model.Allow), rec(model.Limited), rec(model.StepUpMFA), rec(model.Block), rec(model.Block)}, "counts: allow=1 limited=1 stepUpMFA=1 block=2\n"},
+		{"empty log", nil, "counts: allow=0 limited=0 stepUpMFA=0 block=0\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var b strings.Builder
+			if err := report.AuditSummary(&b, tc.give); err != nil {
+				t.Fatalf("AuditSummary: %v", err)
+			}
+			if b.String() != tc.wantOut {
+				t.Errorf("out = %q, want %q", b.String(), tc.wantOut)
+			}
+		})
+	}
+}
+
 func TestAuditWriter(t *testing.T) {
 	t.Run("record is one JSON line in §7 field order", func(t *testing.T) {
 		path := auditPath(t)

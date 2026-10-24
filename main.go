@@ -53,8 +53,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "policies":
 		return cmdPolicies(args[1:], stdout, stderr)
 	case "audit":
-		fmt.Fprintf(stderr, "%s: not implemented yet\n", args[0])
-		return 70
+		return cmdAudit(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown subcommand %q\n", args[0])
 		fmt.Fprint(stderr, usage)
@@ -287,6 +286,45 @@ func cmdPolicies(args []string, stdout, stderr io.Writer) int {
 	}
 	if err := report.Policies(stdout, policies.Pack()); err != nil {
 		fmt.Fprintf(stderr, "policies: %v\n", err)
+		return 65
+	}
+	return 0
+}
+
+const auditUsage = "usage: zt-sim audit <audit.jsonl>"
+
+// cmdAudit re-prints the decisions in an audit log and validates every
+// line; corrupt lines are reported (not silently skipped) and exit 65.
+func cmdAudit(args []string, stdout, stderr io.Writer) int {
+	if len(args) != 1 {
+		fmt.Fprintln(stderr, auditUsage)
+		return 64
+	}
+	f, err := os.Open(args[0])
+	if err != nil {
+		fmt.Fprintf(stderr, "audit: %v\n", err)
+		return 65
+	}
+	defer f.Close()
+	recs, errs := report.ReadAudit(f)
+	for _, e := range errs {
+		fmt.Fprintf(stderr, "audit: %s: %v\n", args[0], e)
+	}
+	if len(recs) > 0 { // no records → no table, just the counts line
+		rows := make([]report.Row, len(recs))
+		for i, r := range recs {
+			rows[i] = report.Row{Signal: r.Signal, Decision: r.Decision}
+		}
+		if err := report.Decisions(stdout, rows); err != nil {
+			fmt.Fprintf(stderr, "audit: %v\n", err)
+			return 65
+		}
+	}
+	if err := report.AuditSummary(stdout, recs); err != nil {
+		fmt.Fprintf(stderr, "audit: %v\n", err)
+		return 65
+	}
+	if len(errs) > 0 {
 		return 65
 	}
 	return 0

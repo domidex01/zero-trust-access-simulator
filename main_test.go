@@ -39,12 +39,6 @@ func TestRun_Dispatch(t *testing.T) {
 			wantExit:   64,
 			wantStderr: []string{`unknown subcommand "frobnicate"`, "usage: zt-sim <command>"},
 		},
-		{
-			name:       "audit is stubbed",
-			args:       []string{"audit"},
-			wantExit:   70,
-			wantStderr: []string{"audit: not implemented yet"},
-		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -549,12 +543,105 @@ func TestRun_RunAudit(t *testing.T) {
 	})
 }
 
+func TestRun_Audit(t *testing.T) {
+	t.Run("reprints decisions and counts", func(t *testing.T) {
+		auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
+		in := writeFile(t, "["+attackerSignal+"]")
+		var pre bytes.Buffer
+		if exit := run([]string{"decide", "--audit", auditPath, in}, strings.NewReader(""), &pre, &pre); exit != 3 {
+			t.Fatalf("decide exit = %d, want 3", exit)
+		}
+		var stdout, stderr bytes.Buffer
+		exit := run([]string{"audit", auditPath}, strings.NewReader(""), &stdout, &stderr)
+		if exit != 0 {
+			t.Fatalf("audit exit = %d, want 0\nstderr:\n%s", exit, stderr.String())
+		}
+		for _, want := range []string{"USER", "BLOCK", "P01: ", "pillars: identity", "counts: allow=0 limited=0 stepUpMFA=0 block=1"} {
+			if !strings.Contains(stdout.String(), want) {
+				t.Errorf("stdout %q does not contain %q", stdout.String(), want)
+			}
+		}
+	})
+
+	t.Run("empty log is valid", func(t *testing.T) {
+		empty := filepath.Join(t.TempDir(), "empty.jsonl")
+		if err := os.WriteFile(empty, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var stdout, stderr bytes.Buffer
+		exit := run([]string{"audit", empty}, strings.NewReader(""), &stdout, &stderr)
+		if exit != 0 {
+			t.Fatalf("exit = %d, want 0\nstderr:\n%s", exit, stderr.String())
+		}
+		if !strings.Contains(stdout.String(), "counts: allow=0 limited=0 stepUpMFA=0 block=0") {
+			t.Errorf("stdout %q must contain the zero counts line", stdout.String())
+		}
+		if strings.Contains(stdout.String(), "pillars:") {
+			t.Errorf("stdout %q must not print an empty decisions table", stdout.String())
+		}
+	})
+
+	t.Run("corrupt line reported, valid still printed", func(t *testing.T) {
+		auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
+		in := writeFile(t, "["+attackerSignal+"]")
+		run([]string{"decide", "--audit", auditPath, in}, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{})
+		f, err := os.OpenFile(auditPath, os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.WriteString("garbage\n"); err != nil {
+			t.Fatal(err)
+		}
+		f.Close()
+
+		var stdout, stderr bytes.Buffer
+		exit := run([]string{"audit", auditPath}, strings.NewReader(""), &stdout, &stderr)
+		if exit != 65 {
+			t.Fatalf("exit = %d, want 65", exit)
+		}
+		if !strings.Contains(stdout.String(), "BLOCK") {
+			t.Errorf("valid record must still print: %q", stdout.String())
+		}
+		if !strings.Contains(stderr.String(), "line 2") {
+			t.Errorf("stderr %q must report line 2", stderr.String())
+		}
+	})
+
+	t.Run("unreadable file exits 65", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		exit := run([]string{"audit", "/nope/x.jsonl"}, strings.NewReader(""), &stdout, &stderr)
+		if exit != 65 {
+			t.Fatalf("exit = %d, want 65", exit)
+		}
+		if !strings.Contains(stderr.String(), "no such file") {
+			t.Errorf("stderr %q must say no such file", stderr.String())
+		}
+	})
+
+	t.Run("usage", func(t *testing.T) {
+		for _, args := range [][]string{{"audit"}, {"audit", "a", "b"}} {
+			var stdout, stderr bytes.Buffer
+			exit := run(args, strings.NewReader(""), &stdout, &stderr)
+			if exit != 64 {
+				t.Errorf("args %v: exit = %d, want 64", args, exit)
+			}
+			if !strings.Contains(stderr.String(), "usage: zt-sim audit") {
+				t.Errorf("args %v: stderr %q must print auditUsage", args, stderr.String())
+			}
+		}
+	})
+}
+
 func TestRun_ExitCodes(t *testing.T) {
 	happy := writeFile(t, "["+happySignal+"]")
 	byod := writeFile(t, "["+byodSignal+"]")
 	stolen := writeFile(t, "["+stolenSignal+"]")
 	attacker := writeFile(t, "["+attackerSignal+"]")
 	failing := writePack(t, `{"name":"failpack","cases":[{"name":"c1","signal":`+happySignal+`,"expect":{"action":"block"}}]}`)
+	validLog := filepath.Join(t.TempDir(), "audit.jsonl")
+	run([]string{"decide", "--audit", validLog, attacker}, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{})
+	corruptLog := filepath.Join(t.TempDir(), "corrupt.jsonl")
+	os.WriteFile(corruptLog, []byte("garbage\n"), 0o644)
 	tests := []struct {
 		name     string
 		args     []string
@@ -574,7 +661,10 @@ func TestRun_ExitCodes(t *testing.T) {
 		{"run missing dir 65", []string{"run", "./nope"}, 65},
 		{"policies exits 0", []string{"policies"}, 0},
 		{"policies extra arg is usage 64", []string{"policies", "x"}, 64},
-		{"audit still the Phase 6 stub exits 70", []string{"audit"}, 70},
+		{"audit valid log exits 0", []string{"audit", validLog}, 0},
+		{"audit no args is usage 64", []string{"audit"}, 64},
+		{"audit missing file 65", []string{"audit", "/nope/x.jsonl"}, 65},
+		{"audit corrupt log 65", []string{"audit", corruptLog}, 65},
 		{"version exits 0", []string{"--version"}, 0},
 	}
 	for _, tc := range tests {
