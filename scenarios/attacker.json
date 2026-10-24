@@ -1,0 +1,27 @@
+{
+  "name": "attacker",
+  "description": "Everything wrong at once: no MFA, unfamiliar country, unmanaged device, high-risk app, risk 85.",
+  "cases": [
+    {
+      "name": "everything-wrong-at-once",
+      "signal": {
+        "timestamp": "2026-01-15T10:00:00Z",
+        "user": "unknown@throwaway.example",
+        "role": "guest",
+        "app": "payroll-app",
+        "dataSensitivity": "high",
+        "location": "NG",
+        "unfamiliarLocation": true,
+        "deviceManaged": false,
+        "deviceCompliant": false,
+        "localHour": 2,
+        "mfaPresent": false,
+        "riskScore": 85
+      },
+      "expect": {
+        "action": "block",
+        "reasonsContain": ["P01", "P02", "P03", "P04", "P06", "P07", "P10"]
+      }
+    }
+  ]
+}

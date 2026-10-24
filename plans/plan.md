@@ -1,19 +1,20 @@
-# Plan — zero-trust-access-simulator (Phase 3 — Policy pack)
-> Goal: `internal/policies` complete and tested — the v1 pack P01–P11 exactly as §4:
-> every matcher, priority, pillar, scope and verbatim audit note, a catch-all that fires
-> only when nothing else does, and the six §6 scenario shapes derivable from the pack
-> as an executable test (before Phase 4 authors the JSON packs).
-> Source: spec.md §10 Phase 3 (T3.1–T3.4), §4 (starter policy pack), §6 (scenario table).
-> Update run: Phases 2/1/0 complete, ids stable, archived below. Task ids match spec §10
-> verbatim (T3.1–T3.4).
+# Plan — zero-trust-access-simulator (Phase 4 — Scenarios & acceptance)
+> Goal: the six §6 scenario packs exist on disk and run as acceptance tests —
+> `internal/scenario` loads + validates packs and checks expectations, and
+> `go test ./...` walks `scenarios/*.json` green.
+> Source: spec.md §10 Phase 4 (T4.1–T4.4), §6 (pack schema + the six packs),
+> §4 (hand-derivation source for T4.4).
+> Update run: Phases 3/2/1/0 complete, ids stable, archived below. Task ids
+> match spec §10 verbatim (T4.1–T4.4).
 
 ## Status
-Phase 3:
-- [x] T3.1 P01–P10 matchers in `Pack()`; Notes verbatim (structurally pinned by T3.4)
-- [x] T3.2 P11 catch-all: matches iff no P01–P10 matched
-- [x] T3.3 Sweep: boundaries (risk 70/71/40/39, hour 4/5/0, confidential/internal) + the six §6 scenario shapes against the real pack
-- [x] T3.4 Sweep: pack sanity — §4 metadata verbatim, IDs unique, catch-all exactly once, pillars valid
+Phase 4:
+- [x] T4.1 `internal/scenario`: pack loader + validator (§6 schema) + `Case.Check`
+- [x] T4.2 Author the six packs from §6 with `expect` blocks (§6 tables = source of truth)
+- [x] T4.3 `scenario_test.go` walks `../../scenarios/*.json`, asserts every expectation
+- [x] T4.4 Hand-verify each pack's outcome against §4 once (derivation in run log)
 
+Phase 3 (complete): T3.1 ✅ · T3.2 ✅ · T3.3 ✅ · T3.4 ✅
 Phase 2 (complete): T2.1 ✅ · T2.2 ✅ · T2.3 ✅ · T2.4 ✅
 Phase 1 (complete): T1.1 ✅ · T1.2 ✅ · T1.3 ✅ · T1.4 ✅ · T1.5 ✅
 Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
@@ -24,7 +25,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T3 ✅ 2026-10-19 — no test (build wiring) · make build/vet/test/fmt/run-demo all pass · +1-line .gitignore for the built binary
 - T1.1 ✅ 2026-10-20 — red: compile error (model.Signal undefined) · green: 1 attempt · 2 cases
 - T1.2 ✅ 2026-10-20 — red: compile error (Action.String undefined) · green: 1 attempt · 10 cases · test-plan fix: out-of-range MarshalText row now asserts an error (was vacuous)
-- T1.3 ✅ 2026-10-20 — red: compile error (model.SensitivityRank undefined) · green: 1 attempt · 8 cases
+- T1.3 ✅ 2026-10-20 — red: compile error (SensitivityRank undefined) · green: 1 attempt · 8 cases
 - T1.4 ✅ 2026-10-20 — red: compile error (Validate/DecodeSignal undefined) · green: 1 attempt · 21 cases · test-plan fix: "limits accepted" split into lower/upper rows (LocalHour can't be 0 and 23 at once)
 - T1.5 ✅ 2026-10-20 — audit: all §9 bullets already mapped; +1 regression test (UnmarshalText no-state-change, passed immediately) · model 100% stmt coverage · no model bugs found
 - review #2 fix ✅ 2026-10-20 — thermonuclear review: JSONText test re-tabled with concrete types (deleted any-dispatch/assertDecision/anyErr), single actionNames table (deleted knownAction) · net −50 lines · 43 subtests + coverage identical
@@ -38,99 +39,122 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T3.3 ✅ 2026-10-20 — sweep: 0 red (gap-closing, T1.5/T2.4 precedent; no pack bugs) · 18 boundary rows + 6 §6 scenario shapes
 - T3.4 ✅ 2026-10-20 — sweep: 0 red (no transcription bugs; pack + table both §4-verbatim, spec diff-checked before T3.1) · policies 100% stmt coverage · §9 audit: fire/silent → FireSilence+CatchAllExclusive; boundaries → Boundaries; IDs/priorities/catch-all-once/pillars → Metadata; §6 rows → ScenarioShapes — all four bullets + all eleven §4 rows mapped
 - review #4 fix ✅ 2026-10-20 — thermonuclear review: 1 minor finding fixed (P11 hand-rolled any-match loop → slices.ContainsFunc) + 1 nit (validPillars moved above its use) · net −3 lines · 45 subtests + coverage identical
+- T4.1 ✅ 2026-10-24 — red: build failure (no non-test Go files in internal/scenario — scenario.Load undefined, T3.1 precedent) · green: 1 attempt (after fixing 2 test-side compile bugs: strings.Replace count arg; unknown-case-field row appended outside the case object → test-plan row corrected) · 1 + 13 + 7 subtests · scenario 100% stmt coverage
+- T4.2 ✅ 2026-10-24 — red: behavioral (all six Load: no such file or directory) · green: 1 attempt · 6 subtests · note-scenario signal = §6 example verbatim, others = TestPack_ScenarioShapes pins
+- T4.3 ✅ 2026-10-24 — sweep: 0 red (gap-closing, T1.5/T2.4/T3.3 precedent; no divergence) · 6 expectation subtests + coverage · glob guard: ≥6 files + six pinned names (empty glob fails, never passes vacuously)
+- T4.4 ✅ 2026-10-24 — hand-derivation vs §4 (test-plan table), all six agree, 0 divergences: happy→P11 only→allow · note-scenario→P01,P02,P03,P04,P06,P08 fire (P05 not-enrolled, P07 65≤70, P09 finance, P10 finance silent)→block · stolen-credential→P01,P04,P08 (P02/P03 familiar, P06 internal, P10 non-payroll silent)→stepUpMFA · insider→P10 only (P06 internal∧compliant silent)→block · byod→P04 only (P06 internal, P01 mfa-on silent)→limited read-only · attacker→P01,P02,P03,P04,P06,P07,P10 (P05 unmanaged, P08 85>70, P09 guest silent)→block, 7 matched = §5 example footer · spec §10 Phase 4 boxes ticked
+- review #5 fix ✅ 2026-10-24 — thermonuclear review (APPROVE): 3 nits fixed (no-op `model.Action` casts → plain consts; ReasonsContain field comment reasons→decision's Matched; happy/insider expect blocks normalized to the multi-line pack format) · net +6 lines (JSON cosmetics only) · 45 subtests + coverage identical
 (appended by execute-plan)
 
-## Not building (YAGNI, Phase 3)
-- Policy pack as JSON/YAML config — policies live in code per §4; trigger: rule set
-  outgrows code (post-v1 stretch §11)
-- `networks`/`infrastructure` policies — v1 has none (§4); trigger: §11 stretch goal
-- Exported per-policy vars — `Pack()` is the single surface; the Phase 5 `policies`
-  subcommand iterates `Pack()`
-- Rewiring engine tests from `miniPack()` to the real pack — the synthetic fixture keeps
-  the engine suite independent of pack content
-- Engine changes — Phase 2 contract is frozen; if a pack need surfaces one, that's a
-  Phase 2 bugfix commit, separate from any T3.x
-- P06 invalid-sensitivity policy (err → block?) — unreachable: `DecodeSignal` validates
-  at the trust boundary; matcher just no-matches on error
-- Benchmarks/allocation tests — eleven one-line matchers
-- A cached/singleton `Engine` over the pack — Phase 5 decides where the Engine lives
+## Not building (YAGNI, Phase 4)
+- The `run` subcommand — dir walking, per-pack summary table, exit codes are Phase 5
+  T5.3; `Load` takes one path, and the T4.3 walker lives in the test until then
+- An engine dependency inside `internal/scenario` — `Case.Check` takes the
+  `model.Decision`, so the package imports only model; Phase 5 wires engine +
+  policies + scenario together in the CLI
+- `expect.pillars` / exact `matched`-set equality — §6 pins action +
+  `reasonsContain` (⊇ semantics) + scope-on-limited only; exact matched sets are
+  already pinned in `TestPack_ScenarioShapes`
+- Required `description` validation — §6 marks only `expect.action` required;
+  name/cases non-empty is loader sanity, description stays optional metadata
+- Rejecting trailing content after the pack value — matches the `DecodeSignal`
+  precedent (single Decode); trigger: the CLI grows multi-document input
+- Schema/version field, multi-pack files — one pack per file per §6
 
-## File map (Phase 3 creates all of these; nothing else changes)
-- `internal/policies/policies.go` — `Pack()`, the eleven policies, matchers inline
-- `internal/policies/policies_test.go` — package `policies_test`, black-box via `Pack()`
-- Untouched: `internal/model`, `internal/engine`, `main.go`, `Makefile`, `scenarios/`
+## File map (Phase 4 creates all of these; nothing else changes)
+- `internal/scenario/scenario.go` — `Pack`/`Case`/`Expectation`, `Load`,
+  unexported `validate`, `Case.Check`
+- `internal/scenario/scenario_test.go` — package `scenario_test`, black-box:
+  loader/check unit tests + the acceptance walker
+- `scenarios/{happy,note-scenario,stolen-credential,insider,byod,attacker}.json` —
+  the six packs, content pinned in test-plan
+- Untouched: `internal/{model,engine,policies}`, `main.go`, `Makefile`
 
 ## Tasks
 
-### T3.1 — P01–P10 matchers, `Pack()` surface
-- Does: `internal/policies/policies.go` — package doc, `func Pack() []engine.Policy`
-  returning the ten core policies as composite literals, one-line closures for `When`
-  (formulas pinned in test-plan). `P06` uses `model.SensitivityRank` with an
-  `err == nil &&` guard plus `const rankConfidential = 2` (the error path is unreachable
-  post-`DecodeSignal`; the const avoids discarding the error return). Notes copied
-  verbatim from §4 incl. em dashes — their verbatim-ness is asserted structurally by
-  T3.4's metadata table, so this task's test stays behavioral. `Pack()` returns the core
-  ten only; P11 arrives in T3.2. Test helper: `policyByID(t, id) engine.Policy` scanning
-  `Pack()` — matchers are tested through the exported pack, no white-box file needed
-- Files: `internal/policies/policies.go` (new), `internal/policies/policies_test.go` (new)
+### T4.1 — loader + validator + `Case.Check`
+- Does: `internal/scenario/scenario.go` — the §6 schema as
+  `Pack{Name, Description, Cases []Case}` / `Case{Name, Signal, Expect}` /
+  `Expectation{Action *model.Action, ReasonsContain []string, Scope string}`
+  (Action is a pointer so "required" is distinguishable from the zero value Allow).
+  `Load(path)`: ReadFile → strict decode (`DisallowUnknownFields`, the `DecodeSignal`
+  precedent) → unexported `validate()` — name non-empty → ≥1 case → per case: name
+  non-empty, `Signal.Validate()`, `expect.action` non-nil, scope ⇒ action limited;
+  errors prefixed with the path so `run` failures are debuggable. `Case.Check(d)
+  error`: action equality → every `reasonsContain` ID present in `d.Matched` →
+  scope equality only when set (§6: scope is optional, checked when action is
+  limited)
+- Files: `internal/scenario/scenario.go` (new), `internal/scenario/scenario_test.go` (new)
 - Depends: —
-- Acceptance: `go test ./internal/policies/ -run TestPack_FireSilence -count=1` exits 0
+- Acceptance: `go test ./internal/scenario/ -run 'TestLoad_Pack|TestLoad_Invalid|TestCase_Check' -count=1` exits 0
 - Est: M
 
-### T3.2 — P11 catch-all: matches iff nothing else did
-- Does: extend `Pack()` to append P11 (Allow, priority 90, pillar identity, note
-  `all signals clean — explicit allow`) whose `When` loops over the ten core policies and
-  returns false on the first match — §4's "catch-all: no P01–P10 matched", literally.
-  Why exclusive rather than always-true: with strictest-wins the *decision* would be
-  identical either way, but `Matched`/`Reasons` must never carry a false "all clear"
-  alongside a real finding (§6 expects P11 absent whenever others match). Red test is
-  behavioral: `policyByID(t, "P11")` Fatalfs while the pack holds only ten
-- Files: `internal/policies/policies.go` (edit), `internal/policies/policies_test.go`
-  (edit — reuses T3.1's shared `triggers` table)
-- Depends: T3.1
-- Acceptance: `go test ./internal/policies/ -run TestPack_CatchAllExclusive -count=1` exits 0
+### T4.2 — author the six packs
+- Does: write `scenarios/*.json` exactly per the test-plan content table — signals
+  are the `TestPack_ScenarioShapes` pins verbatim (note-scenario's signal = the §6
+  example JSON verbatim), `reasonsContain` = the §6 matched-policies column in full,
+  descriptions = the §6 Story column. Test: `TestLoad_SixPacks` — each of the six
+  filenames Loads cleanly, `Name` == file stem, ≥1 case
+- Files: the six `scenarios/*.json` (new), `internal/scenario/scenario_test.go` (edit)
+- Depends: T4.1
+- Acceptance: `go test ./internal/scenario/ -run TestLoad_SixPacks -count=1` exits 0
 - Est: S
 
-### T3.3 — Sweep: boundaries + the six §6 scenario shapes
-- Does: `TestPack_Boundaries` — rows of (signal, checks map[policyID]bool) covering
-  risk 70/71/40/39, intern hour 4/5/0 and the role guard, confidential/high/internal ×
-  device posture for P06, P04/P05 disjointness across the three reachable device states,
-  P02-without-P03 (unfamiliar + MFA, the "P02 is not dead weight" note), P03's `&&`
-  guard, P10's role guard. `TestPack_ScenarioShapes` — the six §6 rows (happy,
-  noteScenario, stolenCred, insider, byod, attacker) as full signals through
-  `engine.New(policies.Pack()).Evaluate`, asserting Action, Scope, Matched, Pillars
-  (exact slices). This is the executable form of the phase done-when "every scenario row
-  in §6 can be derived by hand from the pack". Gap-closing sweep per the T1.5/T2.4
-  precedent: 0 red expected; a red is a real pack bug — fix the pack, not the test
-- Files: `internal/policies/policies_test.go` (edit only)
-- Depends: T3.2
-- Acceptance: `go test ./internal/policies/ -run 'TestPack_Boundaries|TestPack_ScenarioShapes' -count=1`
-  exits 0
-- Est: M
-
-### T3.4 — Sweep: pack sanity (§4 metadata verbatim)
-- Does: `TestPack_Metadata` — pinned §4 table (ID, Priority, Pillar, Then, Scope, Note
-  verbatim; `When` is compared behaviorally elsewhere, and `Policy` has a func field so
-  it isn't `==`-comparable anyway) plus: `len(Pack()) == 11`, IDs unique, exactly one
-  `Allow` and it is P11 ("catch-all present exactly once"), Scope `"read-only"` iff
-  `Then == Limited` else `""`, every Pillar ∈ {identity, devices, applications, data,
-  networks, infrastructure}. Then audit the §9 policies bullets against named tests.
-  0 red expected; a red is a transcription bug — the table is §4 verbatim, so fix the
-  pack; if the table itself diverges from §4, fix both and say so in the run log
-- Files: `internal/policies/policies_test.go` (edit only)
-- Depends: T3.2
-- Acceptance: `go test ./internal/policies/ -count=1 && go test ./... -count=1 && go vet ./...`
-  all exit 0 AND `gofmt -l .` prints nothing AND every §4 row + §9 policies bullet maps
-  to a named test (audit recorded in the run log)
+### T4.3 — acceptance walker
+- Does: `TestPacks_Expectations` — glob `../../scenarios/*.json`; guard ≥6 files
+  found AND all six pinned names present (an empty glob must fail the test, not pass
+  vacuously); per pack, per case (`t.Run "pack/case"`):
+  `engine.New(policies.Pack()).Evaluate(sig)` → `Check` returns nil.
+  `TestPacks_ActionCoverage` — all four actions appear across the packs (§6's
+  "every action is exercised by at least one scenario" claim). Sweep per the
+  T1.5/T2.4/T3.3 precedent: 0 red expected; a red is a real divergence — fix the
+  pack file, or, if the §6 table itself is wrong, fix spec.md + file and say so in
+  the run log
+- Files: `internal/scenario/scenario_test.go` (edit only)
+- Depends: T4.2
+- Acceptance: `go test ./internal/scenario/ -count=1 && go test ./... -count=1` exit 0
 - Est: S
 
-## Done when (Phase 3 exit criteria)
+### T4.4 — hand-verify each pack against §4
+- Does: re-derive all six outcomes from the §4 matchers by hand (no code) — which
+  policies fire and why each silent one stays silent (derivation table is in
+  test-plan); compare with each pack's `expect`; record the result in the run log.
+  Any disagreement → fix per the T4.3 rule before ticking. Then tick the spec §10
+  Phase 4 checkboxes
+- Files: `plans/plan.md` (run log), `spec.md` (ticks) — no production change
+- Depends: T4.3
+- Acceptance: derivation recorded in run log; `go test ./... -count=1 && go vet ./...` exit 0 and `gofmt -l .` prints nothing
+- Est: S
+
+## Done when (Phase 4 exit criteria)
 ```
-go test ./internal/policies/ -count=1         # exit 0 (matchers, catch-all, boundaries, §6 shapes)
-go test ./... -count=1 && go vet ./...        # exit 0 (model + engine + main suites still green)
-gofmt -l .                                    # prints nothing
+go test ./... -count=1      # exit 0 — model, engine, policies, main + the six packs as acceptance tests
+go vet ./...                # exit 0
+gofmt -l .                  # prints nothing
 ```
-Plus: `TestPack_ScenarioShapes` green = the six §6 rows derive from the pack.
+Plus: spec §10 "Done when: `go test ./...` runs all packs green" satisfied.
+
+---
+
+# Phase 3 — Policy pack (complete, archived)
+
+> Goal: `internal/policies` complete and tested — the v1 pack P01–P11 exactly as §4.
+> All tasks ✅ 2026-10-20 (run log above); full task detail in git history /
+> `plans/pr-phase3.md`.
+
+- T3.1 `Pack()` single export surface; P01–P10 matchers as one-line closures,
+  formulas pinned in test-plan, Notes verbatim from §4 (incl. em dashes)
+- T3.2 P11 catch-all (Allow, priority 90): `slices.ContainsFunc` over the ten core
+  `When`s — matches iff none did, so `Matched`/`Reasons` never carry a false
+  all-clear next to a real finding
+- T3.3 sweep: 18 boundary rows (risk 70/71/40/39, intern hour 4/5/0 + role guard,
+  sensitivity × device posture, P04/P05 disjointness, P02-without-P03) + the six
+  §6 scenario shapes through the real pack (exact Action/Scope/Matched/Pillars)
+- T3.4 sweep: §4 metadata pinned positionally (ID/Priority/Pillar/Then/Scope/Note),
+  11 policies, unique IDs, exactly one Allow = P11, scope iff Limited, pillars
+  valid; policies at 100% statement coverage
+
+Files: `internal/policies/policies.go`, `internal/policies/policies_test.go`.
 
 ---
 
