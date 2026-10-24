@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"zt-sim/internal/engine"
 	"zt-sim/internal/model"
+	"zt-sim/internal/policies"
 	"zt-sim/internal/scenario"
 )
 
@@ -165,6 +167,64 @@ func TestLoad_Invalid(t *testing.T) {
 			t.Fatalf("Load error = %v, want no such file", err)
 		}
 	})
+}
+
+func loadPacks(t *testing.T) []scenario.Pack {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join("..", "..", "scenarios", "*.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) < 6 {
+		t.Fatalf("glob found %d packs, want ≥ 6", len(files))
+	}
+	have := make(map[string]bool, len(files))
+	for _, f := range files {
+		have[filepath.Base(f)] = true
+	}
+	for _, want := range []string{"happy.json", "note-scenario.json", "stolen-credential.json", "insider.json", "byod.json", "attacker.json"} {
+		if !have[want] {
+			t.Fatalf("missing scenarios/%s", want)
+		}
+	}
+	packs := make([]scenario.Pack, 0, len(files))
+	for _, f := range files {
+		p, err := scenario.Load(f)
+		if err != nil {
+			t.Fatalf("load %s: %v", f, err)
+		}
+		packs = append(packs, p)
+	}
+	return packs
+}
+
+func TestPacks_Expectations(t *testing.T) {
+	eng := engine.New(policies.Pack())
+	for _, p := range loadPacks(t) {
+		for _, c := range p.Cases {
+			t.Run(p.Name+"/"+c.Name, func(t *testing.T) {
+				d := eng.Evaluate(c.Signal)
+				if err := c.Check(d); err != nil {
+					t.Fatalf("check: %v\ngot decision: %+v", err, d)
+				}
+			})
+		}
+	}
+}
+
+func TestPacks_ActionCoverage(t *testing.T) {
+	eng := engine.New(policies.Pack())
+	seen := make(map[model.Action]bool)
+	for _, p := range loadPacks(t) {
+		for _, c := range p.Cases {
+			seen[eng.Evaluate(c.Signal).Action] = true
+		}
+	}
+	for _, a := range []model.Action{model.Allow, model.Limited, model.StepUpMFA, model.Block} {
+		if !seen[a] {
+			t.Errorf("action %s not exercised by any scenario", a)
+		}
+	}
 }
 
 func TestCase_Check(t *testing.T) {
