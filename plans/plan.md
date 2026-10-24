@@ -1,19 +1,32 @@
-# Plan — zero-trust-access-simulator (Phase 4 — Scenarios & acceptance)
-> Goal: the six §6 scenario packs exist on disk and run as acceptance tests —
-> `internal/scenario` loads + validates packs and checks expectations, and
-> `go test ./...` walks `scenarios/*.json` green.
-> Source: spec.md §10 Phase 4 (T4.1–T4.4), §6 (pack schema + the six packs),
-> §4 (hand-derivation source for T4.4).
-> Update run: Phases 3/2/1/0 complete, ids stable, archived below. Task ids
-> match spec §10 verbatim (T4.1–T4.4).
+# Plan — zero-trust-access-simulator (Phase 5 — CLI)
+> Goal: `zt-sim` works end-to-end per §5 — `decide` (file array or `--stdin`, table or
+> JSON, exit 0–3 by strictest action), `run` (per-case results + PACK summary table,
+> exit 0/1), `policies` (ID/priority/pillar/action/note table), with the §5 exit-code
+> map locked by tests and the demo session producing exit 3.
+> Source: spec.md §10 Phase 5 (T5.1–T5.5), §5 (CLI design + exit codes), §8 (layout:
+> rendering lives in `internal/report`, wiring in `main.go`).
+> Update run: Phases 4/3/2/1/0 complete, ids stable, archived below. Task ids match
+> spec §10 verbatim (T5.1–T5.5).
+>
+> **Spec divergence resolved up front** — §5's example session runs
+> `zt-sim decide scenarios/attacker.json`, but §5's own input rule says decide accepts
+> only JSON signal arrays and *rejects* scenario packs ("use run"). The normative rule
+> wins: the example filename is illustrative, not the pack file. Phase 5 therefore adds
+> `examples/attacker-signals.json` — the attacker pack's signal as a decide-legal
+> array — so the demo session and the Phase 5 done-when are satisfiable. Feeding the
+> *pack* to decide correctly exits 65; T5.5 pins that too. (spec §8 layout grows an
+> `examples/` dir; `scenarios/` can't host it — the T4.3 walker Loads every
+> `scenarios/*.json` and a signals array would fail it.)
 
 ## Status
-Phase 4:
-- [x] T4.1 `internal/scenario`: pack loader + validator (§6 schema) + `Case.Check`
-- [x] T4.2 Author the six packs from §6 with `expect` blocks (§6 tables = source of truth)
-- [x] T4.3 `scenario_test.go` walks `../../scenarios/*.json`, asserts every expectation
-- [x] T4.4 Hand-verify each pack's outcome against §4 once (derivation in run log)
+Phase 5:
+- [ ] T5.1 `internal/report`: decisions table (USER / ACTION / REASONS + pillars footer) + `--format json`
+- [ ] T5.2 `decide`: `model.DecodeSignals` (strict array) + subcommand — file or `--stdin`, exit 65 on bad input
+- [ ] T5.3 `run`: walk dir, per-case PASS/FAIL lines + PACK / CASES / PASS / FAIL / STRICTEST summary, exit 1 on failure
+- [ ] T5.4 `policies`: ID / PRIORITY / PILLAR / ACTION / NOTE table
+- [ ] T5.5 Exit-code map locked per §5 (sweep) + `examples/attacker-signals.json` demo fixture
 
+Phase 4 (complete): T4.1 ✅ · T4.2 ✅ · T4.3 ✅ · T4.4 ✅
 Phase 3 (complete): T3.1 ✅ · T3.2 ✅ · T3.3 ✅ · T3.4 ✅
 Phase 2 (complete): T2.1 ✅ · T2.2 ✅ · T2.3 ✅ · T2.4 ✅
 Phase 1 (complete): T1.1 ✅ · T1.2 ✅ · T1.3 ✅ · T1.4 ✅ · T1.5 ✅
@@ -46,93 +59,167 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - review #5 fix ✅ 2026-10-24 — thermonuclear review (APPROVE): 3 nits fixed (no-op `model.Action` casts → plain consts; ReasonsContain field comment reasons→decision's Matched; happy/insider expect blocks normalized to the multi-line pack format) · net +6 lines (JSON cosmetics only) · 45 subtests + coverage identical
 (appended by execute-plan)
 
-## Not building (YAGNI, Phase 4)
-- The `run` subcommand — dir walking, per-pack summary table, exit codes are Phase 5
-  T5.3; `Load` takes one path, and the T4.3 walker lives in the test until then
-- An engine dependency inside `internal/scenario` — `Case.Check` takes the
-  `model.Decision`, so the package imports only model; Phase 5 wires engine +
-  policies + scenario together in the CLI
-- `expect.pillars` / exact `matched`-set equality — §6 pins action +
-  `reasonsContain` (⊇ semantics) + scope-on-limited only; exact matched sets are
-  already pinned in `TestPack_ScenarioShapes`
-- Required `description` validation — §6 marks only `expect.action` required;
-  name/cases non-empty is loader sanity, description stays optional metadata
-- Rejecting trailing content after the pack value — matches the `DecodeSignal`
-  precedent (single Decode); trigger: the CLI grows multi-document input
-- Schema/version field, multi-pack files — one pack per file per §6
+## Not building (YAGNI, Phase 5)
+- Box-drawing borders + cell truncation from the §5 sketch — §5 says "exact table
+  rendering is up to the report package; the columns and content are the contract";
+  `text/tabwriter` gives aligned columns for free — trigger: README demo wants the
+  boxed look (Phase 7 T7.3)
+- `run --format json` — §5 lists `--format` on run but never defines its payload;
+  trigger: a consumer of machine-readable run results
+- `--audit` flag on decide/run — inert until the AuditWriter exists; lands with the
+  Phase 6 T6.2 wiring (spec T5.x never mentions it)
+- SCOPE column in the decide table — §5 pins USER / ACTION / REASONS; scope rides in
+  `--format json` — trigger: table-only consumers need it
+- Machine markers / colors in run output — plain `PASS`/`FAIL` lines carry it; exit
+  code is the machine interface — trigger: CI tooling wants parseable run output
+  (then build `run --format json`, not colors)
+- Trailing-content rejection after the signals array / pack value — single-Decode
+  precedent (T4.1 not-building) — trigger: multi-document input
+- An `internal/cli` package split — spec §8 pins dispatch + flags + exit codes in
+  `main.go`; four subcommands ≈ 300 lines is fine — trigger: main.go hurts to navigate
+- More `examples/` fixtures beyond attacker-signals.json — one demo file; trigger:
+  README (T7.3) needs more transcripts
 
-## File map (Phase 4 creates all of these; nothing else changes)
-- `internal/scenario/scenario.go` — `Pack`/`Case`/`Expectation`, `Load`,
-  unexported `validate`, `Case.Check`
-- `internal/scenario/scenario_test.go` — package `scenario_test`, black-box:
-  loader/check unit tests + the acceptance walker
-- `scenarios/{happy,note-scenario,stolen-credential,insider,byod,attacker}.json` —
-  the six packs, content pinned in test-plan
-- Untouched: `internal/{model,engine,policies}`, `main.go`, `Makefile`
+## File map (Phase 5 touches only these)
+- `internal/report/report.go` (new) + `report_test.go` (new) — `Row`, `Decisions`,
+  `DecisionsJSON` (T5.1); `PackResult`, `PackSummary` (T5.3); `Policies` (T5.4)
+- `internal/model/signal.go` (edit) + `model_test.go` (edit) — `DecodeSignals` (T5.2)
+- `main.go` (edit) + `main_test.go` (edit) — `run` gains an `stdin io.Reader` param,
+  `cmdDecide` (T5.2), `cmdRun` (T5.3), `cmdPolicies` (T5.4); `audit` stays stubbed
+- `examples/attacker-signals.json` (new) — T5.5 demo fixture
+- Untouched: `internal/{engine,policies,scenario}`, `scenarios/`, `Makefile`
 
 ## Tasks
 
-### T4.1 — loader + validator + `Case.Check`
-- Does: `internal/scenario/scenario.go` — the §6 schema as
-  `Pack{Name, Description, Cases []Case}` / `Case{Name, Signal, Expect}` /
-  `Expectation{Action *model.Action, ReasonsContain []string, Scope string}`
-  (Action is a pointer so "required" is distinguishable from the zero value Allow).
-  `Load(path)`: ReadFile → strict decode (`DisallowUnknownFields`, the `DecodeSignal`
-  precedent) → unexported `validate()` — name non-empty → ≥1 case → per case: name
-  non-empty, `Signal.Validate()`, `expect.action` non-nil, scope ⇒ action limited;
-  errors prefixed with the path so `run` failures are debuggable. `Case.Check(d)
-  error`: action equality → every `reasonsContain` ID present in `d.Matched` →
-  scope equality only when set (§6: scope is optional, checked when action is
-  limited)
-- Files: `internal/scenario/scenario.go` (new), `internal/scenario/scenario_test.go` (new)
+### T5.1 — report: decisions table + JSON
+- Does: `internal/report/report.go` — `Row{Signal model.Signal; Decision
+  model.Decision}` (the USER column comes from the signal, everything else from the
+  decision), `Decisions(w io.Writer, rows []Row) error`: `text/tabwriter`
+  (minwidth 0, tabwidth 0, padding 2, `' '`) writing header `USER\tACTION\tREASONS`,
+  one line per reason (first on the row line, continuations as `\t\t<reason>` so
+  columns align), action as `strings.ToUpper(d.Action.String())`, then Flush and a
+  final `pillars: <unique pillars across all rows, comma-space, first-appearance
+  order>` footer line (§5: columns + content are the contract, not the box art);
+  `DecisionsJSON(w, decisions []model.Decision) error`: `json.NewEncoder` +
+  `SetIndent("", "  ")` — §5 "`--format json` emits a machine-readable `[]Decision`".
+  Empty rows never occur (decide rejects empty arrays in T5.2) — no special case
+- Files: `internal/report/report.go` (new), `internal/report/report_test.go` (new)
 - Depends: —
-- Acceptance: `go test ./internal/scenario/ -run 'TestLoad_Pack|TestLoad_Invalid|TestCase_Check' -count=1` exits 0
+- Acceptance: `go test ./internal/report/ -count=1` exits 0
 - Est: M
 
-### T4.2 — author the six packs
-- Does: write `scenarios/*.json` exactly per the test-plan content table — signals
-  are the `TestPack_ScenarioShapes` pins verbatim (note-scenario's signal = the §6
-  example JSON verbatim), `reasonsContain` = the §6 matched-policies column in full,
-  descriptions = the §6 Story column. Test: `TestLoad_SixPacks` — each of the six
-  filenames Loads cleanly, `Name` == file stem, ≥1 case
-- Files: the six `scenarios/*.json` (new), `internal/scenario/scenario_test.go` (edit)
-- Depends: T4.1
-- Acceptance: `go test ./internal/scenario/ -run TestLoad_SixPacks -count=1` exits 0
+### T5.2 — `decide`: strict array/stdin decode + wiring
+- Does: `model.DecodeSignals(r io.Reader) ([]Signal, error)` next to `DecodeSignal`
+  — same strict decoder (`DisallowUnknownFields`), decodes `[]Signal`, validates each,
+  rejects the empty array (`empty signals array` — nothing to decide is an input
+  error, never a vacuous exit 0; a lone object or a §6 pack fails as `cannot
+  unmarshal object into []model.Signal`, which *is* §5's "packs are rejected there"
+  rule). `main.go`: `run` gains `stdin io.Reader` (main passes `os.Stdin`) so
+  `--stdin` is testable; `cmdDecide(args, stdin, stdout, stderr) int` with
+  `flag.NewFlagSet("decide", flag.ContinueOnError)` (output → stderr; **never**
+  ExitOnError — the CLI owns exit codes), flags `--stdin` and `--format
+  table|json` (default table; anything else → 64 after parse). Exactly one input
+  source (`--stdin` xor one positional path; both or neither → 64). File path:
+  `os.Open` → `DecodeSignals`; `--stdin`: `model.DecodeSignal(stdin)`. One
+  `engine.New(policies.Pack())`, evaluate all, print via `report.Decisions` /
+  `report.DecisionsJSON`, exit = strictest action as int (`max` over `int(d.Action)`
+  — §2: exit code = severity). Input errors → stderr (path-prefixed) + 65; usage →
+  64. `TestRun_Dispatch`'s "decide is stubbed" row is deleted (replaced by
+  `TestRun_Decide`; the run/policies/audit stub rows stay until their tasks)
+- Files: `internal/model/signal.go` (edit), `internal/model/model_test.go` (edit),
+  `main.go` (edit), `main_test.go` (edit)
+- Depends: T5.1
+- Acceptance: `go test ./internal/model/ -run TestDecodeSignals -count=1 && go test . -run 'TestRun_Decide|TestRun_Dispatch' -count=1` exit 0
+- Est: M
+
+### T5.3 — `run`: pack walker + summary table
+- Does: `report.PackResult{Name string; Cases, Pass, Fail int; Strictest
+  model.Action}` + `report.PackSummary(w, results []PackResult) error` — same
+  tabwriter style, header `PACK\tCASES\tPASS\tFAIL\tSTRICTEST`, strictest action
+  uppercased. `cmdRun(args, stdout, stderr) int`: exactly one dir arg (else 64);
+  `os.ReadDir` (already sorted), keep top-level `*.json` only; zero packs found →
+  65 (`no scenario packs in <dir>` — an empty suite must fail loudly); per file
+  `scenario.Load` — first error aborts → 65 (stderr names the file); per case
+  `Evaluate` + `Check`, print `PASS <pack>/<case>` or `FAIL <pack>/<case>:
+  <check error>` per line, collect `PackResult` (Strictest = max action across the
+  pack's decisions); `report.PackSummary` last; exit 0 all pass, 1 otherwise.
+  `TestRun_Dispatch`'s "run is stubbed" row deleted (replaced by `TestRun_Run`)
+- Files: `internal/report/report.go` (edit), `internal/report/report_test.go` (edit),
+  `main.go` (edit), `main_test.go` (edit)
+- Depends: T5.1
+- Acceptance: `go test ./internal/report/ -run TestReport_PackSummary -count=1 && go test . -run 'TestRun_Run|TestRun_Dispatch' -count=1` exit 0
+- Est: M
+
+### T5.4 — `policies`: pack listing
+- Does: `report.Policies(w io.Writer, policies []engine.Policy) error` (report
+  imports engine — it's pure; a mapping struct would be ceremony) — tabwriter table,
+  header `ID\tPRIORITY\tPILLAR\tACTION\tNOTE`, action uppercased, the five §5
+  columns and no scope column. `cmdPolicies(args, stdout, stderr) int`: no extra
+  args (else 64), print `report.Policies(w, policies.Pack())` (slice is already
+  (Priority, ID)-ordered per its doc), exit 0. `TestRun_Dispatch`'s "policies is
+  stubbed" row deleted (replaced by `TestRun_Policies`)
+- Files: `internal/report/report.go` (edit), `internal/report/report_test.go` (edit),
+  `main.go` (edit), `main_test.go` (edit)
+- Depends: T5.1
+- Acceptance: `go test ./internal/report/ -run TestReport_Policies -count=1 && go test . -run 'TestRun_Policies|TestRun_Dispatch' -count=1` exit 0
 - Est: S
 
-### T4.3 — acceptance walker
-- Does: `TestPacks_Expectations` — glob `../../scenarios/*.json`; guard ≥6 files
-  found AND all six pinned names present (an empty glob must fail the test, not pass
-  vacuously); per pack, per case (`t.Run "pack/case"`):
-  `engine.New(policies.Pack()).Evaluate(sig)` → `Check` returns nil.
-  `TestPacks_ActionCoverage` — all four actions appear across the packs (§6's
-  "every action is exercised by at least one scenario" claim). Sweep per the
-  T1.5/T2.4/T3.3 precedent: 0 red expected; a red is a real divergence — fix the
-  pack file, or, if the §6 table itself is wrong, fix spec.md + file and say so in
+### T5.5 — exit-code map sweep + demo fixture
+- Does: `TestRun_ExitCodes` in `main_test.go` locking the §5 table as one matrix —
+  decide 0/1/2/3 via four temp fixture files + 64 (usage ×2) + 65 (bad input ×2,
+  incl. `decide scenarios/attacker.json` → 65, pinning the §5 pack-rejection rule);
+  run 0 (`scenarios/`) / 1 (failing temp pack) / 64 / 65; policies 0 / 64; `audit`
+  still stubbed 70 (Phase 6 replaces it — the row keeps the map complete and makes
+  the Phase 6 diff visible); `--version` 0. Sweep per the T1.5/T2.4/T3.3/T4.3
+  precedent: 0 red expected; a red is a real wiring bug — fix the root cause, never
+  the matrix. Then create `examples/attacker-signals.json` = the `signal` object of
+  `scenarios/attacker.json`'s case verbatim, wrapped in `[ ]` (no re-typing — copy
+  from the pack), tick the spec §10 Phase 5 boxes, and record the demo session in
   the run log
-- Files: `internal/scenario/scenario_test.go` (edit only)
-- Depends: T4.2
-- Acceptance: `go test ./internal/scenario/ -count=1 && go test ./... -count=1` exit 0
+- Files: `main_test.go` (edit), `examples/attacker-signals.json` (new),
+  `plans/plan.md` (run log), `spec.md` (ticks)
+- Depends: T5.2, T5.3, T5.4
+- Acceptance: `go test . -run TestRun_ExitCodes -count=1 && go test ./... -count=1 && go vet ./...` exit 0, `gofmt -l .` prints nothing, and `make build && ./zt-sim decide examples/attacker-signals.json; echo $?` prints the table (7 reasons, `pillars: identity, devices, data, applications`) and `3`
 - Est: S
 
-### T4.4 — hand-verify each pack against §4
-- Does: re-derive all six outcomes from the §4 matchers by hand (no code) — which
-  policies fire and why each silent one stays silent (derivation table is in
-  test-plan); compare with each pack's `expect`; record the result in the run log.
-  Any disagreement → fix per the T4.3 rule before ticking. Then tick the spec §10
-  Phase 4 checkboxes
-- Files: `plans/plan.md` (run log), `spec.md` (ticks) — no production change
-- Depends: T4.3
-- Acceptance: derivation recorded in run log; `go test ./... -count=1 && go vet ./...` exit 0 and `gofmt -l .` prints nothing
-- Est: S
-
-## Done when (Phase 4 exit criteria)
+## Done when (Phase 5 exit criteria)
 ```
-go test ./... -count=1      # exit 0 — model, engine, policies, main + the six packs as acceptance tests
+go test ./... -count=1      # exit 0 — report, model.DecodeSignals, main wiring all green
 go vet ./...                # exit 0
 gofmt -l .                  # prints nothing
+make build
+./zt-sim decide examples/attacker-signals.json   # USER/ACTION/REASONS table, 7 reasons, 4-pillar footer
+echo $?                                           # 3  (§5 session, mirrored — see divergence note above)
+./zt-sim run scenarios/                           # exit 0, six PASS lines + PACK summary
 ```
-Plus: spec §10 "Done when: `go test ./...` runs all packs green" satisfied.
+Plus: spec §10 Phase 5 "Done when" satisfied under the documented divergence
+resolution (examples/ fixture stands in for the illustrative pack filename).
+
+---
+
+# Phase 4 — Scenarios & acceptance (complete, archived)
+
+> Goal: the six §6 scenario packs exist on disk and run as acceptance tests —
+> `internal/scenario` loads + validates packs and checks expectations, and
+> `go test ./...` walks `scenarios/*.json` green.
+> All tasks ✅ 2026-10-24 (run log above); full task detail in git history /
+> `plans/pr-phase4.md`.
+
+- T4.1 `internal/scenario` (engine-free, imports only model): `Pack`/`Case`/
+  `Expectation` (`Action *model.Action` — pointer so "required" beats the Allow zero
+  value), `Load` = ReadFile → strict decode → `validate()` (name → ≥1 case → per
+  case: name → `Signal.Validate` → `expect.action` non-nil → scope ⇒ limited),
+  errors path-prefixed; `Case.Check(d)`: action → every `reasonsContain` ID ∈
+  `d.Matched` → scope only when set. scenario at 100% stmt coverage
+- T4.2 the six packs authored from §6 (signals = TestPack_ScenarioShapes pins,
+  note-scenario = §6 example verbatim); `Name` == file stem
+- T4.3 `TestPacks_Expectations` walker (glob guard: ≥6 files + six pinned names, so
+  an empty glob fails) + `TestPacks_ActionCoverage` — wired into `go test ./...`
+- T4.4 hand-derivation of all six vs §4 matchers, 0 divergences (table in the
+  Phase 4 test-plan revision, git history)
+
+Files: `internal/scenario/scenario.go`, `internal/scenario/scenario_test.go`,
+`scenarios/{happy,note-scenario,stolen-credential,insider,byod,attacker}.json`.
 
 ---
 
