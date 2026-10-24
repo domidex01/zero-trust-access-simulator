@@ -370,7 +370,7 @@ func TestRun_ExitCodes(t *testing.T) {
 		{"decide block exits 3", []string{"decide", attacker}, 3},
 		{"decide no input is usage 64", []string{"decide"}, 64},
 		{"decide bad format is usage 64", []string{"decide", "--format", "yaml", happy}, 64},
-		{"decide pack rejected 65 (SS5 rule)", []string{"decide", "scenarios/attacker.json"}, 65},
+		{"decide pack rejected 65 (§5 rule)", []string{"decide", "scenarios/attacker.json"}, 65},
 		{"decide missing file 65", []string{"decide", "/nope/x.json"}, 65},
 		{"run all pass exits 0", []string{"run", "scenarios"}, 0},
 		{"run failed expectation exits 1", []string{"run", failing}, 1},
