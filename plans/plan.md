@@ -21,7 +21,7 @@
 ## Status
 Phase 5:
 - [x] T5.1 `internal/report`: decisions table (USER / ACTION / REASONS + pillars footer) + `--format json`
-- [ ] T5.2 `decide`: `model.DecodeSignals` (strict array) + subcommand — file or `--stdin`, exit 65 on bad input
+- [x] T5.2 `decide`: `model.DecodeSignals` (strict array) + subcommand — file or `--stdin`, exit 65 on bad input
 - [ ] T5.3 `run`: walk dir, per-case PASS/FAIL lines + PACK / CASES / PASS / FAIL / STRICTEST summary, exit 1 on failure
 - [ ] T5.4 `policies`: ID / PRIORITY / PILLAR / ACTION / NOTE table
 - [ ] T5.5 Exit-code map locked per §5 (sweep) + `examples/attacker-signals.json` demo fixture
@@ -58,6 +58,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T4.4 ✅ 2026-10-24 — hand-derivation vs §4 (test-plan table), all six agree, 0 divergences: happy→P11 only→allow · note-scenario→P01,P02,P03,P04,P06,P08 fire (P05 not-enrolled, P07 65≤70, P09 finance, P10 finance silent)→block · stolen-credential→P01,P04,P08 (P02/P03 familiar, P06 internal, P10 non-payroll silent)→stepUpMFA · insider→P10 only (P06 internal∧compliant silent)→block · byod→P04 only (P06 internal, P01 mfa-on silent)→limited read-only · attacker→P01,P02,P03,P04,P06,P07,P10 (P05 unmanaged, P08 85>70, P09 guest silent)→block, 7 matched = §5 example footer · spec §10 Phase 4 boxes ticked
 - review #5 fix ✅ 2026-10-24 — thermonuclear review (APPROVE): 3 nits fixed (no-op `model.Action` casts → plain consts; ReasonsContain field comment reasons→decision's Matched; happy/insider expect blocks normalized to the multi-line pack format) · net +6 lines (JSON cosmetics only) · 45 subtests + coverage identical
 - T5.1 ✅ 2026-10-24 — red: build failure (no non-test Go files in internal/report — T3.1/T4.1 precedent) · green: 1 attempt · 5 + 3 subtests · test-plan fix ×2: continuation-line indices off by one in attacker-row + stack rows (pre-red and first-green; production output was correct both times, fixture misindexed lines[2]/[3] as lines[1]/[2])
+- T5.2 ✅ 2026-10-24 — red: compile error (undefined: model.DecodeSignals) + behavioral (decide still exit-70 stub) · green: 1 attempt · 6 + 14 subtests + DecideFormatJSON · run gains stdin io.Reader param (main passes os.Stdin) · mid-green fix: signal.go edit accidentally replaced DecodeSignal, restored immediately
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 5)
