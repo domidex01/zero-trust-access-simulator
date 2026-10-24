@@ -400,3 +400,41 @@ func TestAction_UnmarshalTextUnknownLeavesUnchanged(t *testing.T) {
 		t.Errorf("action = %v, want unchanged Block", d.Action)
 	}
 }
+
+// TestDecodeSignals pins the decide file format: a strict JSON array of
+// signals, every element validated, empty rejected (§5 — packs fail here too).
+func TestDecodeSignals(t *testing.T) {
+	const happy = `{"timestamp":"2026-01-15T10:00:00Z","user":"alice@contoso.com","role":"finance","app":"intranet-wiki","dataSensitivity":"internal","location":"US","unfamiliarLocation":false,"deviceManaged":true,"deviceCompliant":true,"localHour":10,"mfaPresent":true,"riskScore":15}`
+	tests := []struct {
+		name    string
+		give    string
+		wantErr string
+	}{
+		{name: "unknown field in element", give: "[" + happy + `,{"risk":9}]`, wantErr: `unknown field "risk"`},
+		{name: "element fails validation", give: `[{"user":"","role":"finance","app":"wiki","dataSensitivity":"internal","timestamp":"2026-01-15T10:00:00Z"}]`, wantErr: "user must not be empty"},
+		{name: "single object not array", give: happy, wantErr: "[]model.Signal"},
+		{name: "scenario pack rejected", give: `{"name":"x","cases":[]}`, wantErr: "[]model.Signal"},
+		{name: "empty array", give: `[]`, wantErr: "empty signals array"},
+		{name: "null", give: `null`, wantErr: "empty signals array"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := model.DecodeSignals(strings.NewReader(tc.give)); err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("err = %v, want containing %q", err, tc.wantErr)
+			}
+		})
+	}
+	t.Run("two valid signals decode with fields intact", func(t *testing.T) {
+		const attacker = `{"timestamp":"2026-01-15T10:00:00Z","user":"unknown@throwaway.example","role":"guest","app":"payroll-app","dataSensitivity":"high","location":"NG","unfamiliarLocation":true,"deviceManaged":false,"deviceCompliant":false,"localHour":2,"mfaPresent":false,"riskScore":85}`
+		got, err := model.DecodeSignals(strings.NewReader("[" + happy + "," + attacker + "]"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("len = %d, want 2", len(got))
+		}
+		if got[0].User != "alice@contoso.com" || got[1].RiskScore != 85 {
+			t.Errorf("got[0].User = %q, got[1].RiskScore = %d, want alice…/85", got[0].User, got[1].RiskScore)
+		}
+	})
+}

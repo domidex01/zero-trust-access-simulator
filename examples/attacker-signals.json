@@ -1,0 +1,16 @@
+[
+  {
+    "timestamp": "2026-01-15T10:00:00Z",
+    "user": "unknown@throwaway.example",
+    "role": "guest",
+    "app": "payroll-app",
+    "dataSensitivity": "high",
+    "location": "NG",
+    "unfamiliarLocation": true,
+    "deviceManaged": false,
+    "deviceCompliant": false,
+    "localHour": 2,
+    "mfaPresent": false,
+    "riskScore": 85
+  }
+]

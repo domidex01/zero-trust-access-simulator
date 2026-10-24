@@ -109,3 +109,26 @@ func DecodeSignal(r io.Reader) (Signal, error) {
 	}
 	return s, nil
 }
+
+// DecodeSignals decodes the decide file format — a JSON array of signals —
+// with the same strictness as DecodeSignal: unknown fields are rejected
+// and every element must pass Validate. An empty array (or null) is an
+// input error: nothing to decide must never exit 0, and a lone object or
+// a §6 scenario pack fails here (§5: packs are rejected in decide).
+func DecodeSignals(r io.Reader) ([]Signal, error) {
+	var signals []Signal
+	dec := json.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&signals); err != nil {
+		return nil, err
+	}
+	if len(signals) == 0 {
+		return nil, errors.New("empty signals array")
+	}
+	for _, s := range signals {
+		if err := s.Validate(); err != nil {
+			return nil, err
+		}
+	}
+	return signals, nil
+}
