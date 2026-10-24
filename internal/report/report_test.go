@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"zt-sim/internal/engine"
 	"zt-sim/internal/model"
 	"zt-sim/internal/report"
 )
@@ -197,5 +198,36 @@ func TestReport_PackSummary(t *testing.T) {
 		if got := strings.Fields(lines[i+1]); !reflect.DeepEqual(got, want) {
 			t.Errorf("row %d = %v, want %v", i+1, got, want)
 		}
+	}
+}
+
+func TestReport_Policies(t *testing.T) {
+	pack := []engine.Policy{
+		{ID: "P01", Priority: 10, Pillar: "identity", Then: model.StepUpMFA,
+			Note: "no second factor presented — verify explicitly"},
+		{ID: "P04", Priority: 30, Pillar: "devices", Then: model.Limited, Scope: "read-only",
+			Note: "unmanaged device — least-privilege grant"},
+	}
+	var buf bytes.Buffer
+	if err := report.Policies(&buf, pack); err != nil {
+		t.Fatalf("Policies: %v", err)
+	}
+	out := buf.String()
+	if got := strings.Fields(strings.Split(out, "\n")[0]); len(got) != 5 || got[0] != "ID" || got[1] != "PRIORITY" || got[2] != "PILLAR" || got[3] != "ACTION" || got[4] != "NOTE" {
+		t.Errorf("header fields = %v, want [ID PRIORITY PILLAR ACTION NOTE]", got)
+	}
+	for _, want := range []string{
+		"P01", "10", "identity", "STEPUPMFA", "no second factor presented — verify explicitly",
+		"P04", "30", "devices", "LIMITED", "unmanaged device — least-privilege grant",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\noutput:\n%s", want, out)
+		}
+	}
+	if strings.Index(out, "P01") > strings.Index(out, "P04") {
+		t.Errorf("rows must keep input order\noutput:\n%s", out)
+	}
+	if strings.Contains(out, "read-only") {
+		t.Errorf("no SCOPE column — read-only must not appear\noutput:\n%s", out)
 	}
 }

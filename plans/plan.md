@@ -23,7 +23,7 @@ Phase 5:
 - [x] T5.1 `internal/report`: decisions table (USER / ACTION / REASONS + pillars footer) + `--format json`
 - [x] T5.2 `decide`: `model.DecodeSignals` (strict array) + subcommand — file or `--stdin`, exit 65 on bad input
 - [x] T5.3 `run`: walk dir, per-case PASS/FAIL lines + PACK / CASES / PASS / FAIL / STRICTEST summary, exit 1 on failure
-- [ ] T5.4 `policies`: ID / PRIORITY / PILLAR / ACTION / NOTE table
+- [x] T5.4 `policies`: ID / PRIORITY / PILLAR / ACTION / NOTE table
 - [ ] T5.5 Exit-code map locked per §5 (sweep) + `examples/attacker-signals.json` demo fixture
 
 Phase 4 (complete): T4.1 ✅ · T4.2 ✅ · T4.3 ✅ · T4.4 ✅
@@ -60,6 +60,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T5.1 ✅ 2026-10-24 — red: build failure (no non-test Go files in internal/report — T3.1/T4.1 precedent) · green: 1 attempt · 5 + 3 subtests · test-plan fix ×2: continuation-line indices off by one in attacker-row + stack rows (pre-red and first-green; production output was correct both times, fixture misindexed lines[2]/[3] as lines[1]/[2])
 - T5.2 ✅ 2026-10-24 — red: compile error (undefined: model.DecodeSignals) + behavioral (decide still exit-70 stub) · green: 1 attempt · 6 + 14 subtests + DecideFormatJSON · run gains stdin io.Reader param (main passes os.Stdin) · mid-green fix: signal.go edit accidentally replaced DecodeSignal, restored immediately
 - T5.3 ✅ 2026-10-24 — red: compile error (undefined: report.PackResult) + behavioral (run stub 70) · green: 1 attempt · 1 + 7 subtests · test-plan fix: PASS/FAIL assertions matched the summary header cells (Count("PASS ")==7, Contains("FAIL")) → per-line HasPrefix counting, header cells excluded
+- T5.4 ✅ 2026-10-24 — red: compile error (undefined: report.Policies) + behavioral (policies stub 70) · green: 1 attempt · 1 + 2 subtests · report imports engine (pure pkg) for the Policies table
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 5)

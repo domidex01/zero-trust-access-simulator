@@ -48,7 +48,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return cmdDecide(args[1:], stdin, stdout, stderr)
 	case "run":
 		return cmdRun(args[1:], stdout, stderr)
-	case "policies", "audit":
+	case "policies":
+		return cmdPolicies(args[1:], stdout, stderr)
+	case "audit":
 		fmt.Fprintf(stderr, "%s: not implemented yet\n", args[0])
 		return 70
 	default:
@@ -194,6 +196,21 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	}
 	if failed {
 		return 1
+	}
+	return 0
+}
+
+const policiesUsage = "usage: zt-sim policies"
+
+// cmdPolicies lists the v1 pack: ID, priority, pillar, action, note (§5).
+func cmdPolicies(args []string, stdout, stderr io.Writer) int {
+	if len(args) != 0 {
+		fmt.Fprintln(stderr, policiesUsage)
+		return 64
+	}
+	if err := report.Policies(stdout, policies.Pack()); err != nil {
+		fmt.Fprintf(stderr, "policies: %v\n", err)
+		return 65
 	}
 	return 0
 }

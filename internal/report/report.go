@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"zt-sim/internal/engine"
 	"zt-sim/internal/model"
 )
 
@@ -79,6 +80,17 @@ func PackSummary(w io.Writer, results []PackResult) error {
 	fmt.Fprintln(tw, "PACK\tCASES\tPASS\tFAIL\tSTRICTEST")
 	for _, r := range results {
 		fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%s\n", r.Name, r.Cases, r.Pass, r.Fail, strings.ToUpper(r.Strictest.String()))
+	}
+	return tw.Flush()
+}
+
+// Policies writes the ID / PRIORITY / PILLAR / ACTION / NOTE table (§5
+// policies) — the five §5 columns; scope is not one of them.
+func Policies(w io.Writer, policies []engine.Policy) error {
+	tw := newTable(w)
+	fmt.Fprintln(tw, "ID\tPRIORITY\tPILLAR\tACTION\tNOTE")
+	for _, p := range policies {
+		fmt.Fprintf(tw, "%s\t%d\t%s\t%s\t%s\n", p.ID, p.Priority, p.Pillar, strings.ToUpper(p.Then.String()), p.Note)
 	}
 	return tw.Flush()
 }

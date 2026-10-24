@@ -38,12 +38,6 @@ func TestRun_Dispatch(t *testing.T) {
 			wantStderr: []string{`unknown subcommand "frobnicate"`, "usage: zt-sim <command>"},
 		},
 		{
-			name:       "policies is stubbed",
-			args:       []string{"policies"},
-			wantExit:   70,
-			wantStderr: []string{"policies: not implemented yet"},
-		},
-		{
 			name:       "audit is stubbed",
 			args:       []string{"audit"},
 			wantExit:   70,
@@ -320,4 +314,38 @@ func writePack(t *testing.T, content string) string {
 		t.Fatal(err)
 	}
 	return dir
+}
+
+func TestRun_Policies(t *testing.T) {
+	t.Run("lists the pack", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		exit := run([]string{"policies"}, strings.NewReader(""), &stdout, &stderr)
+		out := stdout.String()
+		if exit != 0 {
+			t.Fatalf("exit = %d, want 0\nstdout:\n%s\nstderr:\n%s", exit, out, stderr.String())
+		}
+		if got := strings.Fields(strings.Split(out, "\n")[0]); len(got) != 5 || got[0] != "ID" || got[4] != "NOTE" {
+			t.Errorf("header fields = %v, want [ID PRIORITY PILLAR ACTION NOTE]", got)
+		}
+		for _, id := range []string{"P01", "P02", "P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "P11"} {
+			if !strings.Contains(out, id+" ") {
+				t.Errorf("output missing policy %s\noutput:\n%s", id, out)
+			}
+		}
+		for _, want := range []string{"identity", "devices", "data", "applications", "all signals clean — explicit allow"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("output missing %q\noutput:\n%s", want, out)
+			}
+		}
+	})
+	t.Run("extra arg is a usage error", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		exit := run([]string{"policies", "x"}, strings.NewReader(""), &stdout, &stderr)
+		if exit != 64 {
+			t.Errorf("exit = %d, want 64", exit)
+		}
+		if !strings.Contains(stderr.String(), "usage: zt-sim policies") {
+			t.Errorf("stderr = %q, want usage", stderr.String())
+		}
+	})
 }
