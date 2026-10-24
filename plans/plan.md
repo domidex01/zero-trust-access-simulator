@@ -24,7 +24,7 @@ Phase 5:
 - [x] T5.2 `decide`: `model.DecodeSignals` (strict array) + subcommand — file or `--stdin`, exit 65 on bad input
 - [x] T5.3 `run`: walk dir, per-case PASS/FAIL lines + PACK / CASES / PASS / FAIL / STRICTEST summary, exit 1 on failure
 - [x] T5.4 `policies`: ID / PRIORITY / PILLAR / ACTION / NOTE table
-- [ ] T5.5 Exit-code map locked per §5 (sweep) + `examples/attacker-signals.json` demo fixture
+- [x] T5.5 Exit-code map locked per §5 (sweep) + `examples/attacker-signals.json` demo fixture
 
 Phase 4 (complete): T4.1 ✅ · T4.2 ✅ · T4.3 ✅ · T4.4 ✅
 Phase 3 (complete): T3.1 ✅ · T3.2 ✅ · T3.3 ✅ · T3.4 ✅
@@ -61,6 +61,8 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T5.2 ✅ 2026-10-24 — red: compile error (undefined: model.DecodeSignals) + behavioral (decide still exit-70 stub) · green: 1 attempt · 6 + 14 subtests + DecideFormatJSON · run gains stdin io.Reader param (main passes os.Stdin) · mid-green fix: signal.go edit accidentally replaced DecodeSignal, restored immediately
 - T5.3 ✅ 2026-10-24 — red: compile error (undefined: report.PackResult) + behavioral (run stub 70) · green: 1 attempt · 1 + 7 subtests · test-plan fix: PASS/FAIL assertions matched the summary header cells (Count("PASS ")==7, Contains("FAIL")) → per-line HasPrefix counting, header cells excluded
 - T5.4 ✅ 2026-10-24 — red: compile error (undefined: report.Policies) + behavioral (policies stub 70) · green: 1 attempt · 1 + 2 subtests · report imports engine (pure pkg) for the Policies table
+- T5.5 ✅ 2026-10-24 — sweep: 0 red (T1.5/T2.4/T3.3/T4.3 precedent; no wiring bugs) · 16 matrix rows, all §5 codes incl. audit-stub 70 · examples/attacker-signals.json = pack signal verbatim (python assert, no re-typing) · demo session run: decide → 7 reasons, pillars identity/devices/data/applications, exit 3; run scenarios → 6 PASS + summary, exit 0 · coverage: model/engine/policies/scenario 100%, report 96.6%, main 93.2% · spec §10 Phase 5 boxes ticked
+- Phase 5 complete — §5 example session satisfied under the documented divergence resolution (examples/ fixture for the illustrative filename; decide scenarios/attacker.json → 65 pinned as the normative rule)
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 5)

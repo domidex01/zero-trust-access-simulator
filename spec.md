@@ -415,11 +415,11 @@ Work top-to-bottom; each phase builds on the previous one. Commit per task.
 ### Phase 5 — CLI
 > Goal: `zt-sim` end-to-end per §5.
 
-- [ ] **T5.1** `internal/report`: decision table renderer (USER / ACTION / REASONS, pillars footer) + `--format json`
-- [ ] **T5.2** `decide` subcommand: file array or `--stdin` single object; strict decode + `Signal.Validate` → exit 65 on bad input
-- [ ] **T5.3** `run` subcommand: walk dir, per-pack summary table (PACK / CASES / PASS / FAIL / STRICTEST), exit 1 on expectation failure
-- [ ] **T5.4** `policies` subcommand: ID / priority / pillar / action / note table
-- [ ] **T5.5** Exit-code map wired exactly as §5 (decide 0–3 by strictest, run 0/1, 64/65 errors)
+- [x] **T5.1** `internal/report`: decision table renderer (USER / ACTION / REASONS, pillars footer) + `--format json`
+- [x] **T5.2** `decide` subcommand: file array or `--stdin` single object; strict decode + `Signal.Validate` → exit 65 on bad input
+- [x] **T5.3** `run` subcommand: walk dir, per-pack summary table (PACK / CASES / PASS / FAIL / STRICTEST), exit 1 on expectation failure
+- [x] **T5.4** `policies` subcommand: ID / priority / pillar / action / note table
+- [x] **T5.5** Exit-code map wired exactly as §5 (decide 0–3 by strictest, run 0/1, 64/65 errors)
 
 **Done when**: the §5 example session runs verbatim against `scenarios/attacker.json` and `echo $?` prints 3.
 

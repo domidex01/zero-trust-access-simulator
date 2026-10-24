@@ -349,3 +349,43 @@ func TestRun_Policies(t *testing.T) {
 		}
 	})
 }
+
+// TestRun_ExitCodes locks §5's exit-code map end to end. A red here is a
+// wiring bug in T5.2–T5.4, not a matrix problem — fix the cause, not the row.
+func TestRun_ExitCodes(t *testing.T) {
+	happy := writeFile(t, "["+happySignal+"]")
+	byod := writeFile(t, "["+byodSignal+"]")
+	stolen := writeFile(t, "["+stolenSignal+"]")
+	attacker := writeFile(t, "["+attackerSignal+"]")
+	failing := writePack(t, `{"name":"failpack","cases":[{"name":"c1","signal":`+happySignal+`,"expect":{"action":"block"}}]}`)
+	tests := []struct {
+		name     string
+		args     []string
+		wantExit int
+	}{
+		{"decide allow exits 0", []string{"decide", happy}, 0},
+		{"decide limited exits 1", []string{"decide", byod}, 1},
+		{"decide stepUpMFA exits 2", []string{"decide", stolen}, 2},
+		{"decide block exits 3", []string{"decide", attacker}, 3},
+		{"decide no input is usage 64", []string{"decide"}, 64},
+		{"decide bad format is usage 64", []string{"decide", "--format", "yaml", happy}, 64},
+		{"decide pack rejected 65 (SS5 rule)", []string{"decide", "scenarios/attacker.json"}, 65},
+		{"decide missing file 65", []string{"decide", "/nope/x.json"}, 65},
+		{"run all pass exits 0", []string{"run", "scenarios"}, 0},
+		{"run failed expectation exits 1", []string{"run", failing}, 1},
+		{"run no args is usage 64", []string{"run"}, 64},
+		{"run missing dir 65", []string{"run", "./nope"}, 65},
+		{"policies exits 0", []string{"policies"}, 0},
+		{"policies extra arg is usage 64", []string{"policies", "x"}, 64},
+		{"audit still the Phase 6 stub exits 70", []string{"audit"}, 70},
+		{"version exits 0", []string{"--version"}, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if exit := run(tc.args, strings.NewReader(""), &stdout, &stderr); exit != tc.wantExit {
+				t.Errorf("exit = %d, want %d\nstdout:\n%s\nstderr:\n%s", exit, tc.wantExit, stdout.String(), stderr.String())
+			}
+		})
+	}
+}
