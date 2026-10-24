@@ -38,12 +38,6 @@ func TestRun_Dispatch(t *testing.T) {
 			wantStderr: []string{`unknown subcommand "frobnicate"`, "usage: zt-sim <command>"},
 		},
 		{
-			name:       "run is stubbed",
-			args:       []string{"run"},
-			wantExit:   70,
-			wantStderr: []string{"run: not implemented yet"},
-		},
-		{
 			name:       "policies is stubbed",
 			args:       []string{"policies"},
 			wantExit:   70,
@@ -229,4 +223,101 @@ func TestRun_DecideFormatJSON(t *testing.T) {
 	if len(got) != 1 || got[0].Action != model.Block || got[0].Scope != "" || len(got[0].Matched) != 7 {
 		t.Errorf("got = %+v, want 1 block decision with no scope and 7 matched", got)
 	}
+}
+
+func TestRun_Run(t *testing.T) {
+	tests := []struct {
+		name     string
+		dir      func(t *testing.T) string // nil = no dir arg
+		extraArg bool                      // append a bogus second arg
+		wantExit int
+		wantOut  []string
+		wantErr  []string
+	}{
+		{
+			name: "scenarios dir all pass", dir: func(*testing.T) string { return "scenarios" },
+			wantExit: 0,
+			wantOut:  []string{"PACK", "happy", "note-scenario", "stolen-credential", "insider", "byod", "attacker"},
+		},
+		{
+			name: "failing expectation", dir: func(t *testing.T) string {
+				return writePack(t, `{"name":"failpack","cases":[{"name":"c1","signal":`+happySignal+`,"expect":{"action":"block"}}]}`)
+			},
+			wantExit: 1,
+			wantOut:  []string{"FAIL failpack/c1: want action block, got allow", "failpack", "1", "1"},
+		},
+		{
+			name: "corrupt pack aborts", dir: func(t *testing.T) string {
+				return writePack(t, "not json")
+			},
+			wantExit: 65,
+			wantErr:  []string{"pack.json"},
+		},
+		{
+			name: "missing dir", dir: func(*testing.T) string { return "./nope" },
+			wantExit: 65, wantErr: []string{"no such file"},
+		},
+		{
+			name: "dir with no packs", dir: func(t *testing.T) string { return t.TempDir() },
+			wantExit: 65, wantErr: []string{"no scenario packs"},
+		},
+		{
+			name: "no args", wantExit: 64, wantErr: []string{"usage: zt-sim run"},
+		},
+		{
+			name: "two args", dir: func(*testing.T) string { return "scenarios" }, extraArg: true,
+			wantExit: 64, wantErr: []string{"usage: zt-sim run"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			args := []string{"run"}
+			if tc.dir != nil {
+				args = append(args, tc.dir(t))
+			}
+			if tc.extraArg {
+				args = append(args, "bogus")
+			}
+			var stdout, stderr bytes.Buffer
+			exit := run(args, strings.NewReader(""), &stdout, &stderr)
+			out, errOut := stdout.String(), stderr.String()
+			if exit != tc.wantExit {
+				t.Errorf("exit = %d, want %d\nstdout:\n%s\nstderr:\n%s", exit, tc.wantExit, out, errOut)
+			}
+			for _, want := range tc.wantOut {
+				if !strings.Contains(out, want) {
+					t.Errorf("stdout missing %q\nstdout:\n%s", want, out)
+				}
+			}
+			for _, want := range tc.wantErr {
+				if !strings.Contains(errOut, want) {
+					t.Errorf("stderr missing %q\nstderr:\n%s", want, errOut)
+				}
+			}
+			if tc.name == "scenarios dir all pass" {
+				pass, fail := 0, 0
+				for _, l := range strings.Split(out, "\n") {
+					switch {
+					case strings.HasPrefix(l, "PASS "):
+						pass++
+					case strings.HasPrefix(l, "FAIL "):
+						fail++
+					}
+				}
+				if pass != 6 || fail != 0 {
+					t.Errorf("case lines: %d PASS, %d FAIL, want 6 PASS 0 FAIL (summary header cells don't count)\nstdout:\n%s", pass, fail, out)
+				}
+			}
+		})
+	}
+}
+
+// writePack writes one pack file into a fresh temp dir, returning the dir.
+func writePack(t *testing.T, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "pack.json"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }

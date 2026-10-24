@@ -170,3 +170,32 @@ func TestReport_DecisionsJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestReport_PackSummary(t *testing.T) {
+	results := []report.PackResult{
+		{Name: "happy", Cases: 1, Pass: 1, Fail: 0, Strictest: model.Allow},
+		{Name: "attacker", Cases: 1, Pass: 1, Fail: 0, Strictest: model.Block},
+		{Name: "mixed", Cases: 2, Pass: 1, Fail: 1, Strictest: model.Limited},
+	}
+	var buf bytes.Buffer
+	if err := report.PackSummary(&buf, results); err != nil {
+		t.Fatalf("PackSummary: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	if len(lines) != 4 {
+		t.Fatalf("line count = %d, want 4 (header + 3 rows)\noutput:\n%s", len(lines), buf.String())
+	}
+	if got := strings.Fields(lines[0]); len(got) != 5 || got[0] != "PACK" || got[1] != "CASES" || got[2] != "PASS" || got[3] != "FAIL" || got[4] != "STRICTEST" {
+		t.Errorf("header fields = %v, want [PACK CASES PASS FAIL STRICTEST]", got)
+	}
+	wantRows := [][]string{
+		{"happy", "1", "1", "0", "ALLOW"},
+		{"attacker", "1", "1", "0", "BLOCK"},
+		{"mixed", "2", "1", "1", "LIMITED"},
+	}
+	for i, want := range wantRows {
+		if got := strings.Fields(lines[i+1]); !reflect.DeepEqual(got, want) {
+			t.Errorf("row %d = %v, want %v", i+1, got, want)
+		}
+	}
+}

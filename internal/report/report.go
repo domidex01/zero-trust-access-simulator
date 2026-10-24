@@ -63,3 +63,22 @@ func DecisionsJSON(w io.Writer, decisions []model.Decision) error {
 	enc.SetIndent("", "  ")
 	return enc.Encode(decisions)
 }
+
+// PackResult is one row of the run summary table — counts per pack and
+// the strictest action it produced.
+type PackResult struct {
+	Name       string
+	Cases      int
+	Pass, Fail int
+	Strictest  model.Action
+}
+
+// PackSummary writes the PACK / CASES / PASS / FAIL / STRICTEST table (§5 run).
+func PackSummary(w io.Writer, results []PackResult) error {
+	tw := newTable(w)
+	fmt.Fprintln(tw, "PACK\tCASES\tPASS\tFAIL\tSTRICTEST")
+	for _, r := range results {
+		fmt.Fprintf(tw, "%s\t%d\t%d\t%d\t%s\n", r.Name, r.Cases, r.Pass, r.Fail, strings.ToUpper(r.Strictest.String()))
+	}
+	return tw.Flush()
+}

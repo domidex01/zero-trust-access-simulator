@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"zt-sim/internal/engine"
 	"zt-sim/internal/model"
 	"zt-sim/internal/policies"
 	"zt-sim/internal/report"
+	"zt-sim/internal/scenario"
 )
 
 const version = "0.1.0"
@@ -43,7 +46,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 0
 	case "decide":
 		return cmdDecide(args[1:], stdin, stdout, stderr)
-	case "run", "policies", "audit":
+	case "run":
+		return cmdRun(args[1:], stdout, stderr)
+	case "policies", "audit":
 		fmt.Fprintf(stderr, "%s: not implemented yet\n", args[0])
 		return 70
 	default:
@@ -128,4 +133,67 @@ func cmdDecide(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+}
+
+const runUsage = "usage: zt-sim run <scenarios-dir>"
+
+// cmdRun loads every *.json pack in dir, checks each case's expectation
+// against the real pack, prints per-case lines and the summary table.
+// Exit 0 all pass, 1 any failure, 65 unreadable/invalid pack.
+func cmdRun(args []string, stdout, stderr io.Writer) int {
+	if len(args) != 1 {
+		fmt.Fprintln(stderr, runUsage)
+		return 64
+	}
+	dir := args[0]
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		fmt.Fprintf(stderr, "run: %v\n", err)
+		return 65
+	}
+	var packs []scenario.Pack
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		p, err := scenario.Load(filepath.Join(dir, e.Name()))
+		if err != nil {
+			fmt.Fprintf(stderr, "run: %v\n", err)
+			return 65
+		}
+		packs = append(packs, p)
+	}
+	if len(packs) == 0 {
+		fmt.Fprintf(stderr, "run: no scenario packs in %s\n", dir)
+		return 65
+	}
+
+	e := engine.New(policies.Pack())
+	var results []report.PackResult
+	failed := false
+	for _, p := range packs {
+		res := report.PackResult{Name: p.Name, Strictest: model.Allow}
+		for _, c := range p.Cases {
+			d := e.Evaluate(c.Signal)
+			res.Cases++
+			res.Strictest = max(res.Strictest, d.Action)
+			if err := c.Check(d); err != nil {
+				failed = true
+				res.Fail++
+				fmt.Fprintf(stdout, "FAIL %s/%s: %v\n", p.Name, c.Name, err)
+				continue
+			}
+			res.Pass++
+			fmt.Fprintf(stdout, "PASS %s/%s\n", p.Name, c.Name)
+		}
+		results = append(results, res)
+	}
+	if err := report.PackSummary(stdout, results); err != nil {
+		fmt.Fprintf(stderr, "run: %v\n", err)
+		return 65
+	}
+	if failed {
+		return 1
+	}
+	return 0
 }
