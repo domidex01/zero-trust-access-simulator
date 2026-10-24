@@ -1,0 +1,28 @@
+{
+  "name": "byod",
+  "description": "Personal phone, MFA done, familiar location, internal data, risk 15 — the just-enough-access demo.",
+  "cases": [
+    {
+      "name": "personal-phone-internal-data",
+      "signal": {
+        "timestamp": "2026-01-15T10:00:00Z",
+        "user": "alice@contoso.com",
+        "role": "finance",
+        "app": "intranet-wiki",
+        "dataSensitivity": "internal",
+        "location": "US",
+        "unfamiliarLocation": false,
+        "deviceManaged": false,
+        "deviceCompliant": false,
+        "localHour": 10,
+        "mfaPresent": true,
+        "riskScore": 15
+      },
+      "expect": {
+        "action": "limited",
+        "scope": "read-only",
+        "reasonsContain": ["P04"]
+      }
+    }
+  ]
+}

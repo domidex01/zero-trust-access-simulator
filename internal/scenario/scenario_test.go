@@ -69,6 +69,23 @@ func TestLoad_Pack(t *testing.T) {
 	}
 }
 
+func TestLoad_SixPacks(t *testing.T) {
+	for _, name := range []string{"happy", "note-scenario", "stolen-credential", "insider", "byod", "attacker"} {
+		t.Run(name, func(t *testing.T) {
+			p, err := scenario.Load(filepath.Join("..", "..", "scenarios", name+".json"))
+			if err != nil {
+				t.Fatalf("load: %v", err)
+			}
+			if p.Name != name {
+				t.Errorf("Name = %q, want %q", p.Name, name)
+			}
+			if len(p.Cases) == 0 {
+				t.Error("no cases")
+			}
+		})
+	}
+}
+
 func TestLoad_Invalid(t *testing.T) {
 	tests := []struct {
 		name string

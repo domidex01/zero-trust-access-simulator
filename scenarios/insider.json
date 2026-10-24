@@ -1,0 +1,24 @@
+{
+  "name": "insider",
+  "description": "Valid identity, compliant device, MFA — but engineering role requests payroll-app (least privilege).",
+  "cases": [
+    {
+      "name": "engineering-requests-payroll",
+      "signal": {
+        "timestamp": "2026-01-15T10:00:00Z",
+        "user": "bob@contoso.com",
+        "role": "engineering",
+        "app": "payroll-app",
+        "dataSensitivity": "internal",
+        "location": "US",
+        "unfamiliarLocation": false,
+        "deviceManaged": true,
+        "deviceCompliant": true,
+        "localHour": 10,
+        "mfaPresent": true,
+        "riskScore": 15
+      },
+      "expect": { "action": "block", "reasonsContain": ["P10"] }
+    }
+  ]
+}

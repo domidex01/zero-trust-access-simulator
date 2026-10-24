@@ -1,0 +1,27 @@
+{
+  "name": "note-scenario",
+  "description": "Flagship demo from the SC-900 note: Alice travelling, personal laptop, payroll app, 03:14 local.",
+  "cases": [
+    {
+      "name": "alice-travel-personal-device",
+      "signal": {
+        "timestamp": "2026-01-15T03:14:00Z",
+        "user": "alice@contoso.com",
+        "role": "finance",
+        "app": "payroll-app",
+        "dataSensitivity": "high",
+        "location": "BR",
+        "unfamiliarLocation": true,
+        "deviceManaged": false,
+        "deviceCompliant": false,
+        "localHour": 3,
+        "mfaPresent": false,
+        "riskScore": 65
+      },
+      "expect": {
+        "action": "block",
+        "reasonsContain": ["P01", "P02", "P03", "P04", "P06", "P08"]
+      }
+    }
+  ]
+}
