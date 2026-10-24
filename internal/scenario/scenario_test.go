@@ -228,9 +228,9 @@ func TestPacks_ActionCoverage(t *testing.T) {
 }
 
 func TestCase_Check(t *testing.T) {
-	block := model.Action(model.Block)
-	allow := model.Action(model.Allow)
-	limited := model.Action(model.Limited)
+	block := model.Block
+	allow := model.Allow
+	limited := model.Limited
 
 	blockD := model.Decision{
 		Action:  model.Block,

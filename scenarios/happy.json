@@ -18,7 +18,10 @@
         "mfaPresent": true,
         "riskScore": 15
       },
-      "expect": { "action": "allow", "reasonsContain": ["P11"] }
+      "expect": {
+        "action": "allow",
+        "reasonsContain": ["P11"]
+      }
     }
   ]
 }

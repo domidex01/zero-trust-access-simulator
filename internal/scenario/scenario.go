@@ -19,7 +19,7 @@ import (
 // "required" is distinguishable from the zero value (Allow).
 type Expectation struct {
 	Action         *model.Action `json:"action"`         // required
-	ReasonsContain []string      `json:"reasonsContain"` // policy IDs that must appear in reasons
+	ReasonsContain []string      `json:"reasonsContain"` // policy IDs that must appear in the decision's Matched
 	Scope          string        `json:"scope"`          // checked when Action is limited
 }
 

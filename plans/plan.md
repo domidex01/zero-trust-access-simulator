@@ -43,6 +43,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T4.2 ✅ 2026-10-24 — red: behavioral (all six Load: no such file or directory) · green: 1 attempt · 6 subtests · note-scenario signal = §6 example verbatim, others = TestPack_ScenarioShapes pins
 - T4.3 ✅ 2026-10-24 — sweep: 0 red (gap-closing, T1.5/T2.4/T3.3 precedent; no divergence) · 6 expectation subtests + coverage · glob guard: ≥6 files + six pinned names (empty glob fails, never passes vacuously)
 - T4.4 ✅ 2026-10-24 — hand-derivation vs §4 (test-plan table), all six agree, 0 divergences: happy→P11 only→allow · note-scenario→P01,P02,P03,P04,P06,P08 fire (P05 not-enrolled, P07 65≤70, P09 finance, P10 finance silent)→block · stolen-credential→P01,P04,P08 (P02/P03 familiar, P06 internal, P10 non-payroll silent)→stepUpMFA · insider→P10 only (P06 internal∧compliant silent)→block · byod→P04 only (P06 internal, P01 mfa-on silent)→limited read-only · attacker→P01,P02,P03,P04,P06,P07,P10 (P05 unmanaged, P08 85>70, P09 guest silent)→block, 7 matched = §5 example footer · spec §10 Phase 4 boxes ticked
+- review #5 fix ✅ 2026-10-24 — thermonuclear review (APPROVE): 3 nits fixed (no-op `model.Action` casts → plain consts; ReasonsContain field comment reasons→decision's Matched; happy/insider expect blocks normalized to the multi-line pack format) · net +6 lines (JSON cosmetics only) · 45 subtests + coverage identical
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 4)
