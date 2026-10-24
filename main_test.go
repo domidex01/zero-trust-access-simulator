@@ -367,21 +367,19 @@ func auditRun(t *testing.T, content string, args []string, stdin string) (int, s
 	return exit, stdout.String(), stderr.String(), auditPath
 }
 
-// records decodes the audit file's lines into records (T6.2 needs no reader —
-// plain unmarshal; ReadAudit lands in T6.3).
+// records reads the audit file through the real reader — CLI tests then
+// double as writer→reader round-trips, and a lenient test-side decoder
+// can't mask an asymmetry.
 func records(t *testing.T, path string) []report.AuditRecord {
 	t.Helper()
-	b, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
-		t.Fatalf("read audit file: %v", err)
+		t.Fatalf("open audit file: %v", err)
 	}
-	var recs []report.AuditRecord
-	for _, line := range strings.Split(strings.TrimSuffix(string(b), "\n"), "\n") {
-		var r report.AuditRecord
-		if err := json.Unmarshal([]byte(line), &r); err != nil {
-			t.Fatalf("decode audit line %q: %v", line, err)
-		}
-		recs = append(recs, r)
+	defer f.Close()
+	recs, errs := report.ReadAudit(f)
+	if len(errs) != 0 {
+		t.Fatalf("audit file has bad lines: %v", errs)
 	}
 	return recs
 }
@@ -393,8 +391,6 @@ func TestRun_DecideAudit(t *testing.T) {
 		args     []string
 		stdin    string
 		wantExit int
-		wantOut  []string
-		wantErr  []string
 		notOut   []string // stdout must NOT contain these
 		verify   func(t *testing.T, auditPath, out, errOut string)
 	}{
@@ -467,16 +463,6 @@ func TestRun_DecideAudit(t *testing.T) {
 			exit, out, errOut, auditPath := auditRun(t, tc.content, tc.args, tc.stdin)
 			if exit != tc.wantExit {
 				t.Errorf("exit = %d, want %d\nstdout:\n%s\nstderr:\n%s", exit, tc.wantExit, out, errOut)
-			}
-			for _, want := range tc.wantOut {
-				if !strings.Contains(out, want) {
-					t.Errorf("stdout %q does not contain %q", out, want)
-				}
-			}
-			for _, want := range tc.wantErr {
-				if !strings.Contains(errOut, want) {
-					t.Errorf("stderr %q does not contain %q", errOut, want)
-				}
 			}
 			for _, unwanted := range tc.notOut {
 				if strings.Contains(out, unwanted) {

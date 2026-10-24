@@ -158,6 +158,8 @@ Signal JSON fixtures for main tests: the Phase 5 `happy/byod/stolen/attacker` st
 | bad ts is corrupt | `"ts":"yesterday"` | errs — RFC 3339 enforced by `time.Time` decode |
 | blank line is corrupt | valid + `` + valid | 2 records; errs[0] `line 2` |
 | truncated last line (no trailing \n) still seen | valid + `{"ts":"2026-` | 1 record; errs[0] `line 2` |
+| trailing content after the record is corrupt | valid + ` junk` (same line) | errs `line 1: trailing content` — a line must be exactly one record (review #7) |
+| two records on one line are corrupt | valid + valid, no \n between | errs `line 1: trailing content` (review #7) |
 | empty reader | `` | 0 records, 0 errs |
 
 ### TestAuditSummary (report)

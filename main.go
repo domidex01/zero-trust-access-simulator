@@ -29,7 +29,7 @@ commands:
 
 flags on decide/run:
   --audit <file>          append decisions to an append-only JSONL audit log
-  --format table|json     output format (default table)
+  --format table|json     output format (default table; decide only)
 
 global:
   --version               print version and exit
@@ -207,13 +207,14 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		p, err := scenario.Load(filepath.Join(dir, e.Name()))
+		path := filepath.Join(dir, e.Name())
+		p, err := scenario.Load(path)
 		if err != nil {
 			fmt.Fprintf(stderr, "run: %v\n", err)
 			return 65
 		}
 		packs = append(packs, p)
-		sources = append(sources, filepath.Join(dir, e.Name()))
+		sources = append(sources, path)
 	}
 	if len(packs) == 0 {
 		fmt.Fprintf(stderr, "run: no scenario packs in %s\n", dir)

@@ -53,6 +53,8 @@ func TestReadAudit(t *testing.T) {
 		{"bad ts is corrupt", strings.ReplaceAll(wantLine, `"ts":"2026-01-15T03:14:00Z"`, `"ts":"yesterday"`), 0, []string{"line 1"}},
 		{"blank line is corrupt", wantLine + "\n\n" + bLine, 2, []string{"line 2"}},
 		{"truncated last line still seen", wantLine + "\n{" + `"ts":"2026-`, 1, []string{"line 2"}},
+		{"trailing content after the record is corrupt", wantLine + " junk", 0, []string{"line 1: trailing content"}},
+		{"two records on one line are corrupt", wantLine + wantLine, 0, []string{"line 1: trailing content"}},
 		{"empty reader", "", 0, nil},
 	}
 	for _, tc := range tests {

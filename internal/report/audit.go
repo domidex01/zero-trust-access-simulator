@@ -74,6 +74,10 @@ func ReadAudit(r io.Reader) (records []AuditRecord, errs []error) {
 			errs = append(errs, fmt.Errorf("line %d: %v", n, err))
 			continue
 		}
+		if dec.More() { // the line must be exactly one record
+			errs = append(errs, fmt.Errorf("line %d: trailing content after JSON value", n))
+			continue
+		}
 		records = append(records, rec)
 	}
 	if err := sc.Err(); err != nil {
