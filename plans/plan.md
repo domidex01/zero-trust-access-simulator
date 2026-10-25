@@ -32,8 +32,11 @@
 >    run-demo: build
 >    	@rm -f audit.jsonl
 >    	@./zt-sim decide --audit audit.jsonl examples/attacker-signals.json; echo $$?
->    	@./zt-sim run scenarios/
+>    	@./zt-sim run scenarios/; echo $$?
 >    ```
+>    (`; echo $$?` on run too — fixed during T7.4: the originally pinned recipe omitted
+>    it while the pinned transcript ends with `0`, making byte-exactness unsatisfiable)
+>    and `build`'s recipe line is `@`-silenced so run-demo's stdout carries no make noise.
 >    `rm -f audit.jsonl` makes run-demo idempotent (audit log reset to the transcript's
 >    implied fresh state each run). "Reproduces the transcript" = run-demo's stdout
 >    equals the README Demo block minus `$`-prompt lines, byte for byte.
@@ -52,7 +55,7 @@ Phase 7:
 - [x] T7.1 fmt/vet/test clean-baseline sweep (0 red expected)
 - [x] T7.2 README.md: what/why, Install, Usage, Exit codes, Policies (§4), Scenarios (§6), Demo stub
 - [x] T7.3 Demo transcript in README: §5 session + `run scenarios/` summary, verbatim capture
-- [ ] T7.4 `make run-demo` reproduces the transcript from a clean build; fresh-clone v1 check; spec §10 ticks
+- [x] T7.4 `make run-demo` reproduces the transcript from a clean build; fresh-clone v1 check; spec §10 ticks
 
 Phase 6 (complete): T6.1 ✅ · T6.2 ✅ · T6.3 ✅ · T6.4 ✅
 Phase 5 (complete): T5.1 ✅ · T5.2 ✅ · T5.3 ✅ · T5.4 ✅ · T5.5 ✅
@@ -103,6 +106,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T7.1 ✅ 2026-10-25 — sweep: 0 red (plan-time baseline re-verified; T1.5/T2.4/T3.3/T4.3/T5.5/T6.4 precedent) · gofmt -l . empty · vet 0 · 6 packages ok, no .go files touched
 - T7.2 ✅ 2026-10-25 — red: acceptance exit 1 (test -f README.md — file absent) · green: 1 attempt · 6 H2s / 11 policy rows / 6 scenario rows verified · usage strings copied from main.go's consts, not the §5 sketch · suite green, 0 .go files touched
 - T7.3 ✅ 2026-10-25 — red: anchors 0 (Demo header-only) · green: 1 attempt + 1 wording fix (README "Flags come before" → "flags come before" to match the pinned anchor — README side fixed, test untouched) · transcript assembled from /tmp captures by cat, not hand-typed (T5.1 indent-drift precedent); diff vs live output: byte-exact · decide exit 3, run exit 0, audit.jsonl 1 line, cleaned up
+- T7.4 ✅ 2026-10-25 — red: stub anchors 0 · green: 1 attempt + 2 fixes (build recipe `@`-silenced — run-demo's first line was make's own echo; run line gained `; echo $$?` — plan bug: pinned recipe omitted it while the pinned transcript ends with `0`; Makefile fixed, acceptance unchanged) · make exit 0 despite decide's 3 · idempotent (cmp) · byte-exact vs README transcript · audit.jsonl 1 line, cleaned up · fresh-clone v1 check: see below
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 7)

@@ -1,7 +1,7 @@
 .PHONY: build test fmt vet run-demo
 
 build:
-	go build -o zt-sim .
+	@go build -o zt-sim .
 
 test:
 	go test ./... -count=1
@@ -12,6 +12,9 @@ fmt:
 vet:
 	go vet ./...
 
-# Phase 0 stub; Phase 7 (T7.4) expands to the full §5 demo transcript.
+# Reproduces the README demo transcript from a clean build.
+# decide exits 3 (Block) on purpose — `; echo $$?` shows it without failing make.
 run-demo: build
-	./zt-sim --version
+	@rm -f audit.jsonl
+	@./zt-sim decide --audit audit.jsonl examples/attacker-signals.json; echo $$?
+	@./zt-sim run scenarios/; echo $$?
