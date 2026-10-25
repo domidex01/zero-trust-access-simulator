@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="450" height="329" viewBox="0 0 450 329">
+<rect width="450" height="329" rx="10" fill="#1e1e2e"/>
+<line x1="0" y1="38" x2="450" y2="38" stroke="#313244"/>
+<circle cx="24" cy="19" r="5.5" fill="#ff5f57"/>
+<circle cx="46" cy="19" r="5.5" fill="#febc2e"/>
+<circle cx="68" cy="19" r="5.5" fill="#28c840"/>
+<text x="225" y="23" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#7f849c">zt-sim run scenarios/</text>
+<g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#cdd6f4">
+<text x="22" y="65" xml:space="preserve"><tspan fill="#a6e3a1">PASS attacker/everything-wrong-at-once</tspan></text>
+<text x="22" y="86" xml:space="preserve"><tspan fill="#a6e3a1">PASS byod/personal-phone-internal-data</tspan></text>
+<text x="22" y="107" xml:space="preserve"><tspan fill="#a6e3a1">PASS happy/alice-normal-day</tspan></text>
+<text x="22" y="128" xml:space="preserve"><tspan fill="#a6e3a1">PASS insider/engineering-requests-payroll</tspan></text>
+<text x="22" y="149" xml:space="preserve"><tspan fill="#a6e3a1">PASS note-scenario/alice-travel-personal-device</tspan></text>
+<text x="22" y="170" xml:space="preserve"><tspan fill="#a6e3a1">PASS stolen-credential/attacker-with-alices-password</tspan></text>
+<text x="22" y="191" xml:space="preserve"><tspan fill="#89b4fa">PACK               CASES  PASS  FAIL  STRICTEST</tspan></text>
+<text x="22" y="212" xml:space="preserve"><tspan>attacker           1      1     0     </tspan><tspan fill="#f38ba8">BLOCK</tspan></text>
+<text x="22" y="233" xml:space="preserve"><tspan>byod               1      1     0     </tspan><tspan fill="#cba6f7">LIMITED</tspan></text>
+<text x="22" y="254" xml:space="preserve"><tspan>happy              1      1     0     </tspan><tspan fill="#a6e3a1">ALLOW</tspan></text>
+<text x="22" y="275" xml:space="preserve"><tspan>insider            1      1     0     </tspan><tspan fill="#f38ba8">BLOCK</tspan></text>
+<text x="22" y="296" xml:space="preserve"><tspan>note-scenario      1      1     0     </tspan><tspan fill="#f38ba8">BLOCK</tspan></text>
+<text x="22" y="317" xml:space="preserve"><tspan>stolen-credential  1      1     0     </tspan><tspan fill="#f9e2af">STEPUPMFA</tspan></text>
+</g>
+</svg>

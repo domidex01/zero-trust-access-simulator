@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="801" height="308" viewBox="0 0 801 308">
+<rect width="801" height="308" rx="10" fill="#1e1e2e"/>
+<line x1="0" y1="38" x2="801" y2="38" stroke="#313244"/>
+<circle cx="24" cy="19" r="5.5" fill="#ff5f57"/>
+<circle cx="46" cy="19" r="5.5" fill="#febc2e"/>
+<circle cx="68" cy="19" r="5.5" fill="#28c840"/>
+<text x="400" y="23" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#7f849c">zt-sim policies</text>
+<g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#cdd6f4">
+<text x="22" y="65" xml:space="preserve"><tspan fill="#89b4fa">ID   PRIORITY  PILLAR        ACTION     NOTE</tspan></text>
+<text x="22" y="86" xml:space="preserve"><tspan>P01  10        identity      </tspan><tspan fill="#f9e2af">STEPUPMFA</tspan><tspan>  no second factor presented — verify explicitly</tspan></text>
+<text x="22" y="107" xml:space="preserve"><tspan>P02  20        identity      </tspan><tspan fill="#f9e2af">STEPUPMFA</tspan><tspan>  unfamiliar sign-in location — re-verify</tspan></text>
+<text x="22" y="128" xml:space="preserve"><tspan>P03  20        identity      </tspan><tspan fill="#f38ba8">BLOCK</tspan><tspan>      unfamiliar location and no MFA — assume breach</tspan></text>
+<text x="22" y="149" xml:space="preserve"><tspan>P04  30        devices       </tspan><tspan fill="#cba6f7">LIMITED</tspan><tspan>    unmanaged device — least-privilege grant</tspan></text>
+<text x="22" y="170" xml:space="preserve"><tspan>P05  30        devices       </tspan><tspan fill="#cba6f7">LIMITED</tspan><tspan>    enrolled but non-compliant device — least-privilege grant</tspan></text>
+<text x="22" y="191" xml:space="preserve"><tspan>P06  40        data          </tspan><tspan fill="#f38ba8">BLOCK</tspan><tspan>      confidential/high data on non-compliant device</tspan></text>
+<text x="22" y="212" xml:space="preserve"><tspan>P07  50        identity      </tspan><tspan fill="#f38ba8">BLOCK</tspan><tspan>      risk score above hard threshold</tspan></text>
+<text x="22" y="233" xml:space="preserve"><tspan>P08  60        identity      </tspan><tspan fill="#f9e2af">STEPUPMFA</tspan><tspan>  elevated risk — verify explicitly</tspan></text>
+<text x="22" y="254" xml:space="preserve"><tspan>P09  70        identity      </tspan><tspan fill="#f9e2af">STEPUPMFA</tspan><tspan>  odd-hours intern activity</tspan></text>
+<text x="22" y="275" xml:space="preserve"><tspan>P10  80        applications  </tspan><tspan fill="#f38ba8">BLOCK</tspan><tspan>      app outside requester's role — least privilege</tspan></text>
+<text x="22" y="296" xml:space="preserve"><tspan>P11  90        identity      </tspan><tspan fill="#a6e3a1">ALLOW</tspan><tspan>      all signals clean — explicit allow</tspan></text>
+</g>
+</svg>

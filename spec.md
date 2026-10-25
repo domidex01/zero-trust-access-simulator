@@ -436,10 +436,10 @@ Work top-to-bottom; each phase builds on the previous one. Commit per task.
 ### Phase 7 — Polish
 > Goal: shippable v1.
 
-- [ ] **T7.1** `gofmt -l .` empty; `go vet ./...` clean
-- [ ] **T7.2** README: what/why, install (`go build`), usage, exit codes, policy table, scenario table
-- [ ] **T7.3** Demo transcript in README: the §5 session + `run scenarios/` summary
-- [ ] **T7.4** `make run-demo` reproduces the transcript from a clean build
+- [x] **T7.1** `gofmt -l .` empty; `go vet ./...` clean
+- [x] **T7.2** README: what/why, install (`go build`), usage, exit codes, policy table, scenario table
+- [x] **T7.3** Demo transcript in README: the §5 session + `run scenarios/` summary
+- [x] **T7.4** `make run-demo` reproduces the transcript from a clean build
 
 **v1 definition of done**: fresh clone → `go build ./... && go test ./...` green →
 `./zt-sim run scenarios/` all packs pass → README demo reproduces.
