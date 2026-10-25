@@ -97,3 +97,42 @@ Scenario packs live in `scenarios/*.json` (schema: `name`, `cases[]` of `signal`
 | `attacker.json` | everything wrong at once: no MFA, unfamiliar country, unmanaged device, high-risk app, risk 85 | **Block** | P01, P02, P03, P04, P06, P07, P10 — cites identity, devices, data, applications |
 
 ## Demo
+
+```sh
+$ ./zt-sim decide --audit audit.jsonl examples/attacker-signals.json
+USER                       ACTION  REASONS
+unknown@throwaway.example  BLOCK   P01: no second factor presented — verify explicitly
+                                   P02: unfamiliar sign-in location — re-verify
+                                   P03: unfamiliar location and no MFA — assume breach
+                                   P04: unmanaged device — least-privilege grant
+                                   P06: confidential/high data on non-compliant device
+                                   P07: risk score above hard threshold
+                                   P10: app outside requester's role — least privilege
+pillars: identity, devices, data, applications
+audit: 7 policies matched, decision appended to audit.jsonl
+$ echo $?
+3
+$ ./zt-sim run scenarios/
+PASS attacker/everything-wrong-at-once
+PASS byod/personal-phone-internal-data
+PASS happy/alice-normal-day
+PASS insider/engineering-requests-payroll
+PASS note-scenario/alice-travel-personal-device
+PASS stolen-credential/attacker-with-alices-password
+PACK               CASES  PASS  FAIL  STRICTEST
+attacker           1      1     0     BLOCK
+byod               1      1     0     LIMITED
+happy              1      1     0     ALLOW
+insider            1      1     0     BLOCK
+note-scenario      1      1     0     BLOCK
+stolen-credential  1      1     0     STEPUPMFA
+$ echo $?
+0
+```
+
+
+Because the CLI is built on stdlib `flag`, flags come before the positional argument.
+`decide` takes a JSON **array** of signals, so the demo feeds
+`examples/attacker-signals.json` — the attacker pack's signal as an array, kept in
+lockstep with `scenarios/attacker.json` by a test. Scenario packs themselves belong to
+`run`, which checks each pack's `expect` block and prints the summary table above.
