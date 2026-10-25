@@ -1,44 +1,60 @@
-# Plan — zero-trust-access-simulator (Phase 6 — Audit log)
-> Goal: `--audit <file>` appends one JSONL record per decision from `decide` and `run`
-> (§7 — existing lines never rewritten), and `zt-sim audit <file>` re-prints the
-> decisions with action counts, reporting corrupt lines and exiting 65.
-> Source: spec.md §10 Phase 6 (T6.1–T6.4), §7 (record schema + append-only invariant),
-> §5 (--audit flag, audit subcommand, exit codes, session footer line), §8 (audit
-> writer/reader lives in `internal/report`), §9 (report: write-twice byte-compare +
-> corrupt-line detection).
-> Update run: Phases 5/4/3/2/1/0 complete, ids stable, archived below. Task ids match
-> spec §10 verbatim (T6.1–T6.4).
+# Plan — zero-trust-access-simulator (Phase 7 — Polish)
+> Goal: shippable v1 — README documents what/why, install, usage, exit codes, the policy
+> and scenario tables, and a demo transcript that `make run-demo` reproduces from a clean
+> build; fmt/vet/test baseline recorded green. Spec §10 v1 definition of done: fresh
+> clone → `go build ./... && go test ./...` green → `./zt-sim run scenarios/` all packs
+> pass → README demo reproduces.
+> Source: spec.md §10 Phase 7 (T7.1–T7.4), §5 (usage, exit codes, example session),
+> §4 (policy table), §6 (scenario table), §8 (layout), §12 (concept mapping for the
+> what/why intro).
+> Update run: Phases 6/5/4/3/2/1/0 complete, ids stable, archived below. Task ids match
+> spec §10 verbatim (T7.1–T7.4).
 >
 > **Decisions pinned up front** (spec leaves these open; execution needs no judgment):
-> 1. `report.AuditRecord{TS, Cmd, Source, Signal}` with `model.Decision` **embedded** —
->    its json tags flatten to top level in §7's exact field order (ts, cmd, source,
->    signal, action, scope, reasons, pillars, matched; struct field order = JSON order).
-> 2. `ts` comes from an injected clock — `NewAuditWriter(path, now func() time.Time)`;
->    main passes `time.Now`, tests a fixed clock (project rule: no `time.Now` inline in
->    code under test). §7's "wall-clock write time" is the default wiring, not a hardcode.
-> 3. `source`: decide = the path exactly as given, or `"stdin"` under `--stdin`; run =
->    the pack's file path (`filepath.Join(dir, entry)`) — §7's example only pins decide.
-> 4. Audit footer (§5 session line, printed once per invocation, after all output):
->    `audit: %d policies matched, decision appended to %s`, %d = Σ len(Matched) over
->    appended decisions — matches §5 verbatim for the one-decision demo.
->    `// shortcut: "decision" stays singular for N>1 appended records; reword when a
->    consumer of the footer cares`. Printed by **main**, not report — `report.go`'s §5
->    tables stay frozen this phase.
-> 5. Audit read is decode-only strict: `DisallowUnknownFields` (like every decoder here);
->    a line is valid iff it decodes into `AuditRecord` — bad `ts` (RFC 3339) and unknown
->    action text fail decode for free. §7's bar is "validates every line parses", not
->    re-validation of the embedded signal (the writer already validated it).
-> 6. Ordering & precedence: input is decoded/validated **before** the audit file is
->    opened (a bad input must not create an empty audit file); audit open/append failure
->    exits 65 and beats decide's strictest 0–3 and run's 0/1.
+> 1. **No Go code changes in Phase 7** — no red/green cycles, no new test files. Docs +
+>    Makefile + verification only. Precedents: T0.3 (build wiring), T4.2 (authoring),
+>    T1.5/T6.4 (0-red sweeps). Every acceptance below is command-shaped instead.
+> 2. **README structure pinned**: H1 + what/why intro (SC-900 companion, Zero Trust
+>    decision engine, the three principles → mechanics in one paragraph), then exactly
+>    six H2 sections in order: `Install`, `Usage`, `Exit codes`, `Policies`,
+>    `Scenarios`, `Demo` (T7.2 stubs `Demo` with just the header; T7.3 fills it).
+>    Grep-countable: 6 × `^## `, 11 × `^| P`, 6 × scenario rows.
+> 3. **Transcript = §5 session + run summary, nothing more**: decide on the attacker
+>    fixture with `--audit audit.jsonl` (repo root, already gitignored), `$ echo $?` →
+>    `3`, then `run scenarios/`. No `policies`/`audit` read-back in the transcript —
+>    §10 T7.3 pins "the §5 session + `run scenarios/` summary". README shows `$` prompts
+>    as presentation; the output bytes are the contract.
+> 4. **run-demo recipe pinned** (replaces the Phase 0 stub); every line `@`-silenced so
+>    run-demo's stdout is *only* command output, and `; echo $$?` after decide both
+>    reproduces §5's exit-code step and keeps make green (exit 3 is a successful Block,
+>    not a make failure — the recipe line's status becomes echo's 0):
+>    ```make
+>    run-demo: build
+>    	@rm -f audit.jsonl
+>    	@./zt-sim decide --audit audit.jsonl examples/attacker-signals.json; echo $$?
+>    	@./zt-sim run scenarios/
+>    ```
+>    `rm -f audit.jsonl` makes run-demo idempotent (audit log reset to the transcript's
+>    implied fresh state each run). "Reproduces the transcript" = run-demo's stdout
+>    equals the README Demo block minus `$`-prompt lines, byte for byte.
+> 5. **Divergences from §5's sketch documented in `## Demo`** (a fresh-clone user must
+>    be able to copy-paste every command): (a) flags precede the positional — stdlib
+>    `flag` parses flags-first, §5's sketch ordering is illustrative (Phase 6 pin);
+>    (b) decide takes signal *arrays*, so the demo uses `examples/attacker-signals.json`
+>    (pinned equal to the attacker pack's signal by `TestExamples_AttackerMatchesPack`)
+>    while packs like `scenarios/attacker.json` belong to `run` (Phase 5 pin).
+> 6. **Fresh-clone check runs after the T7.4 commit** — `git clone .` sees committed
+>    state only; the check verifies exactly what a fresh user gets. Version stays
+>    `0.1.0`; no tag/release task exists in the spec.
 
 ## Status
-Phase 6:
-- [x] T6.1 `internal/report`: `AuditRecord` + `AuditWriter` — `O_APPEND|O_CREATE|O_WRONLY`, one JSON line per decision, `ts` = injected write clock
-- [x] T6.2 Wire `--audit` into `decide` and `run` (append per decision, footer, 65 on audit failure)
-- [x] T6.3 `audit` subcommand: `ReadAudit` + counts; re-print decisions, corrupt lines reported → exit 65
-- [x] T6.4 Append-only + corruption sweep at CLI level; demo session with `--audit`; spec §10 ticks
+Phase 7:
+- [x] T7.1 fmt/vet/test clean-baseline sweep (0 red expected)
+- [ ] T7.2 README.md: what/why, Install, Usage, Exit codes, Policies (§4), Scenarios (§6), Demo stub
+- [ ] T7.3 Demo transcript in README: §5 session + `run scenarios/` summary, verbatim capture
+- [ ] T7.4 `make run-demo` reproduces the transcript from a clean build; fresh-clone v1 check; spec §10 ticks
 
+Phase 6 (complete): T6.1 ✅ · T6.2 ✅ · T6.3 ✅ · T6.4 ✅
 Phase 5 (complete): T5.1 ✅ · T5.2 ✅ · T5.3 ✅ · T5.4 ✅ · T5.5 ✅
 Phase 4 (complete): T4.1 ✅ · T4.2 ✅ · T4.3 ✅ · T4.4 ✅
 Phase 3 (complete): T3.1 ✅ · T3.2 ✅ · T3.3 ✅ · T3.4 ✅
@@ -84,126 +100,157 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T6.4 ✅ 2026-10-24 — sweep: 0 red (T1.5/T2.4/T3.3/T4.3/T5.5 precedent; no wiring bugs) · TestRun_AuditAppendOnly (two run() opens, line 1 byte-identical) + TestRun_AuditTruncated (no-\n half-line → 65, valid record still printed/counted) · demo session: decide --audit → §5 table + `audit: 7 policies matched, decision appended to audit.jsonl`, exit 3; second run exit 3, 2 lines, line 1 unchanged; audit → table + `counts: allow=0 limited=0 stepUpMFA=0 block=2`, exit 0; garbage line 3 → reported, exit 65 · divergence noted: §5's sketch puts --audit after the positional, stdlib flag (§5-pinned) parses flags-first — demo runs flags-first, §5's session ordering is illustrative (Phase 5 divergence-note precedent) · .gitignore += audit.jsonl · spec §10 Phase 6 boxes ticked
 - Phase 6 complete — §7 append-only JSONL + §5 audit subcommand satisfied; §10 Phase 6 done-when "re-running decide never mutates old lines" pinned by TestRun_AuditAppendOnly
 - review #7 fix ✅ 2026-10-24 — thermonuclear review: 5 findings, all fixed — F3 ReadAudit blessed trailing content after a valid record ({rec}{rec} silently dropped the second!) → dec.More() check + 2 red/green rows (trust boundary); F1 cmdRun walked with filepath.Join computed twice → hoisted; F2 usage grouped --format under decide/run though it's decide-only → "(decide only)"; F4 main-test records() was a pre-T6.3 lenient shim duplicating ReadAudit → routed through the real reader (CLI tests now writer→reader round-trips); F5 TestRun_DecideAudit's wantOut/wantErr fields dead → deleted · rejected with reasons: shared auditSink type over open/append/close/footer (two call sites, different shapes — wrapper adds a layer to save ~8 lines), append-inside-evaluate-loop (interleaves IO), map over [4]int · noted: main_test.go 766 lines — split per subcommand if Phase 7 grows it · coverage after: report 93.4%, main 87.3%
+- T7.1 ✅ 2026-10-25 — sweep: 0 red (plan-time baseline re-verified; T1.5/T2.4/T3.3/T4.3/T5.5/T6.4 precedent) · gofmt -l . empty · vet 0 · 6 packages ok, no .go files touched
 (appended by execute-plan)
 
-## Not building (YAGNI, Phase 6)
-- Log rotation / size caps — a simulator's log is demo-scale; trigger: a long-running
-  deployment writes unbounded JSONL
-- `--audit` on `policies` — §5 pins the flag on decide/run only; trigger: spec change
-- Filters on `audit` output (`--user`, `--since`, action args) — trigger: logs outgrow
-  one screen
-- `audit --format json` — §5 defines no machine payload for audit; trigger: a consumer
-  of machine-readable audit summaries
-- fsync/durability beyond `O_APPEND` — process-crash atomicity is out of scope; trigger:
-  a crash-safety requirement
-- Re-validating embedded signals on audit read (`Signal.Validate` in the reader) — §7's
-  bar is "every line parses" and the writer already validated; trigger: audit logs from
-  writers we don't own
-- Buffered audit writes — one `Write` per record is the durability story here; trigger:
-  throughput on huge decide arrays
+## Not building (YAGNI, Phase 7)
+- CI workflow / badges / coverage shields — trigger: repo published or gains collaborators
+- `make check` aggregate target (fmt+vet+test in one) — the three commands already exist; trigger: CI wants a single entry point
+- main_test.go split per subcommand (noted in review #7) — Phase 7 adds zero tests; trigger: next task that grows main_test.go past ~800 lines
+- README drift-guard Go test (grepping README from `go test`) — brittle; `TestExamples_AttackerMatchesPack` already pins the demo fixture's data; trigger: observed README rot
+- `policies` / `audit` read-back steps in the demo transcript — §10 T7.3 pins "§5 session + run summary"; trigger: README readers ask for the audit round-trip
+- `go test -race` — zero goroutines in the codebase (`grep 'go func'` empty); trigger: first concurrent code
+- Version bump / `git tag v1.0.0` / CHANGELOG / LICENSE — no release task in the spec; trigger: user asks for a release
+- §11 stretch goals (networks/infrastructure policies, sortresp, attack replay, web dashboard, config-file policies, CIA tags, step-up mode) — explicitly post-v1
 
-## File map (Phase 6 touches only these)
-- `internal/report/audit.go` (new) + `internal/report/audit_test.go` (new) —
-  `AuditRecord`, `NewAuditWriter`/`Append`/`Close` (T6.1); `ReadAudit`, `AuditSummary`
-  (T6.3). Separate file: `report.go`'s §5 tables stay byte-frozen this phase
-- `main.go` (edit) + `main_test.go` (edit) — usage strings gain `--audit`
-  (usage const, `decideUsage`, `runUsage`); `cmdDecide`/`cmdRun` flag wiring + footer
-  (T6.2); `audit` dispatch → `cmdAudit` + `auditUsage` (T6.3); append-only/truncated
-  sweep tests (T6.4)
-- `.gitignore` (edit) — `audit.jsonl` demo artifact (T6.4)
-- Untouched: `internal/report/report.go`, `internal/{model,engine,policies,scenario}`,
-  `scenarios/`, `examples/`, `Makefile` (T7.4 owns run-demo)
+## File map (Phase 7 touches only these)
+- `README.md` (new) — T7.2: H1 + what/why intro, `Install`, `Usage`, `Exit codes`, `Policies`, `Scenarios`, `Demo` (header only). T7.3: transcript + divergence notes into `## Demo`
+- `Makefile` (edit) — T7.4: replace the Phase 0 `run-demo` stub with the pinned recipe (decision 4)
+- `spec.md` (edit) — T7.4: tick §10 Phase 7 boxes (all four at once, phase-complete precedent from T4.4/T5.5/T6.4)
+- `plans/plan.md` (edit) — run log entries per task (this file)
+- `plans/pr-phase7.md` (new) — PR body at wrap-up (per-phase precedent)
+- Untouched: every `.go` file — `main.go`, `main_test.go`, all of `internal/` (no behavior change; fmt/vet/test already green at plan time)
 
 ## Tasks
 
-### T6.1 — report: AuditRecord + AuditWriter
-- Does: `internal/report/audit.go`: `AuditRecord` per pinned decision 1 (Decision
-  embedded — flatten, §7 field order); `NewAuditWriter(path string, now func()
-  time.Time) (*AuditWriter, error)` — `os.OpenFile(path, os.O_APPEND|os.O_CREATE|
-  os.O_WRONLY, 0o644)` (§7: append-only, existing lines never rewritten, missing file
-  created); `(*AuditWriter) Append(cmd, source string, s model.Signal, d
-  model.Decision) error` — `AuditRecord{TS: now(), Cmd: cmd, Source: source, Signal:
-  s, Decision: d}`, `json.Marshal` + one `Write` of `line + "\n"` (no buffering, no
-  validation — the CLI validated upstream); `(*AuditWriter) Close() error`. cmd/source
-  ride on `Append` (run's source varies per pack; no per-record writer churn)
-- Files: `internal/report/audit.go` (new), `internal/report/audit_test.go` (new)
+### T7.1 — fmt/vet/test clean-baseline sweep
+- Does: record the shippable baseline — `gofmt -l .` prints nothing, `go vet ./...`
+  exits 0, `go test ./... -count=1` exits 0. Verified green at plan time (2026-10-25);
+  0 red expected (T1.5/T2.4/T3.3/T4.3/T5.5/T6.4 precedent). If anything is red it is a
+  bug — fix the root cause in code, never the tests. No file edits expected; this task
+  exists so the §10 T7.1 box is earned, not assumed
+- Files: none (whatever gofmt/vet names, if anything)
 - Depends: —
-- Acceptance: `go test ./internal/report/ -run TestAuditWriter -count=1` exits 0
-- Est: M
-
-### T6.2 — `--audit` on decide + run
-- Does: `cmdDecide`: `audit := fs.String("audit", "", "append decisions to this JSONL audit log")`; after input decode (never before — pinned decision 6), if set:
-  `report.NewAuditWriter(*audit, time.Now)` → err 65; after evaluation, `Append("decide",
-  source, s, d)` per decision (source = path as given, or `"stdin"`), `Close` → err 65
-  (beats strictest); after rendering, footer per pinned decision 4 on stdout. `cmdRun`:
-  gains its own `flag.NewFlagSet("run", flag.ContinueOnError)` (output → stderr;
-  `--audit` same semantics), `fs.Args()` ≠ 1 → 64; per record `Append("run",
-  filepath.Join(dir, entry.Name()), c.Signal, d)`; append error → 65 (beats 0/1);
-  footer after `PackSummary`. Usage strings updated: usage const's flag block becomes
-  "flags on decide/run:" + `--audit <file>` line; `decideUsage`/`runUsage` gain
-  `[--audit <file>]`. Footer lives in main — report untouched
-- Files: `main.go` (edit), `main_test.go` (edit)
-- Depends: T6.1
-- Acceptance: `go test . -run 'TestRun_Decide|TestRun_Run' -count=1` exits 0
-- Est: M
-
-### T6.3 — `audit` subcommand: reader + counts
-- Does: `internal/report/audit.go`: `ReadAudit(r io.Reader) (records []AuditRecord,
-  errs []error)` — `bufio.Scanner`, per line strict decode (`json.NewDecoder` over the
-  line, `DisallowUnknownFields`) into `AuditRecord`; corrupt line → `fmt.Errorf("line
-  %d: %v", n, err)` into errs while valid records still decode (§7: reported, not
-  silently skipped); blank line is corrupt; `scanner.Err()` surfaces as an error.
-  `AuditSummary(w io.Writer, records []AuditRecord) error` — one line
-  `counts: allow=N limited=N stepUpMFA=N block=N` (§2 severity order, `Action.String()`
-  names, all four always). `main.go`: `auditUsage`; `cmdAudit(args, stdout, stderr)
-  int` — ≠1 arg → 64; `os.Open` err → 65; `ReadAudit`; each err → stderr
-  `audit: <path>: <err>`; valid records re-printed via existing `report.Decisions`
-  (rows `{Signal: r.Signal, Decision: r.Decision}` — §7 "re-prints decisions"; skip
-  the table when 0 records, avoiding an empty pillars footer), then `AuditSummary`;
-  any corrupt line → exit 65 (valid records still printed). `run`'s audit case
-  replaces the 70 stub; `TestRun_Dispatch`'s "audit is stubbed" row deleted (replaced
-  by `TestRun_Audit`); `TestRun_ExitCodes`' audit-70 row → 0/64/65 rows
-- Files: `internal/report/audit.go` (edit), `internal/report/audit_test.go` (edit),
-  `main.go` (edit), `main_test.go` (edit)
-- Depends: T6.1 (record type; natural order after T6.2 — footer/flag wiring unchanged)
-- Acceptance: `go test ./internal/report/ -run 'TestReadAudit|TestAuditSummary' -count=1 && go test . -run 'TestRun_Audit|TestRun_ExitCodes' -count=1` exits 0
-- Est: M
-
-### T6.4 — append-only + corruption sweep, demo session
-- Does: `TestRun_AuditAppendOnly` — two `run()` decide invocations sharing one
-  `--audit` temp file (two opens = two processes' worth); after run 2 the file has 2
-  records and line 1 is byte-identical to after run 1 (§10 T6.4 + Phase 6 done-when
-  "re-running decide never mutates old lines"). `TestRun_AuditTruncated` — one valid
-  record (written via decide `--audit`) + a trailing truncated half-line, no `\n` →
-  `audit` reports `line 2` on stderr, exit 65. Sweep per the T1.5/T2.4/T3.3/T4.3/T5.5
-  precedent: 0 red expected; a red is a wiring bug — fix the root cause, never the
-  test. Then the demo session: `make build`; `decide examples/attacker-signals.json
-  --audit audit.jsonl` → §5 table + `audit: 7 policies matched, decision appended to
-  audit.jsonl` footer, exit 3; same command again → 2 lines in the log, line 1
-  unchanged; `audit audit.jsonl` → re-printed table + counts, exit 0;
-  `printf 'garbage\n' >> audit.jsonl` + `audit audit.jsonl` → line 3 reported, exit
-  65. `.gitignore` += `audit.jsonl`; tick spec §10 Phase 6 boxes; record the session
-  in the run log
-- Files: `main_test.go` (edit), `.gitignore` (edit), `plans/plan.md` (run log),
-  `spec.md` (ticks)
-- Depends: T6.2, T6.3
-- Acceptance: `go test . -run 'TestRun_Audit' -count=1 && go test ./... -count=1 && go vet ./...` exit 0, `gofmt -l .` prints nothing, and the demo session above behaves as written (footer line verbatim, exits 3/3/0/65)
+- Acceptance: `gofmt -l .` prints nothing; `go vet ./... && go test ./... -count=1` exits 0
 - Est: S
 
-## Done when (Phase 6 exit criteria)
+### T7.2 — README: what/why, install, usage, exit codes, policy + scenario tables
+- Does: `README.md` per pinned decision 2. H1 `# zt-sim — Zero Trust access simulator`
+  + one-paragraph what/why (hands-on companion to SC-900 study notes; signals in →
+  conditional-access evaluation → Allow/Limited/StepUpMFA/Block with an audit trail;
+  verify explicitly / least privilege / assume breach as the mapping, §12). Sections:
+  `## Install` — `go build` (zero deps, offline), `make build`, Go version; `## Usage`
+  — the four subcommands + `--stdin`/`--format`/`--audit`/`--version` from §5, four
+  actions with one-line meanings; `## Exit codes` — §5's exit-code tables verbatim
+  (decide 0–3 by strictest action; run 0/1; policies/audit 0/64/65); `## Policies` —
+  §4's 11-row table verbatim (ID/Priority/Pillar/When/Then/Note, em dashes intact);
+  `## Scenarios` — §6's 6-row table verbatim (file/story/expected/matched); `## Demo`
+  — header only (T7.3 fills it)
+- Files: `README.md` (new)
+- Depends: T7.1 (baseline green before docs freeze)
+- Acceptance: `test -f README.md && [ "$(grep -c '^## ' README.md)" -eq 6 ] && [ "$(grep -c '^| P[0-9][0-9] ' README.md)" -eq 11 ] && [ "$(grep -c '\.json` |' README.md)" -eq 6 ] && grep -q 'go build' README.md && grep -q '64' README.md && grep -q '65' README.md`
+- Est: S
+
+### T7.3 — Demo transcript in README
+- Does: capture the real session (verified 2026-10-25, `make build` state) and paste it
+  into `## Demo` as one `sh` block with `$` prompts, then the two divergence notes per
+  pinned decision 5. Transcript (verbatim — tabwriter spacing and em dashes as
+  printed):
+  ```sh
+  $ ./zt-sim decide --audit audit.jsonl examples/attacker-signals.json
+  USER                       ACTION  REASONS
+  unknown@throwaway.example  BLOCK   P01: no second factor presented — verify explicitly
+                                     P02: unfamiliar sign-in location — re-verify
+                                     P03: unfamiliar location and no MFA — assume breach
+                                     P04: unmanaged device — least-privilege grant
+                                     P06: confidential/high data on non-compliant device
+                                     P07: risk score above hard threshold
+                                     P10: app outside requester's role — least privilege
+  pillars: identity, devices, data, applications
+  audit: 7 policies matched, decision appended to audit.jsonl
+  $ echo $?
+  3
+  $ ./zt-sim run scenarios/
+  PASS attacker/everything-wrong-at-once
+  PASS byod/personal-phone-internal-data
+  PASS happy/alice-normal-day
+  PASS insider/engineering-requests-payroll
+  PASS note-scenario/alice-travel-personal-device
+  PASS stolen-credential/attacker-with-alices-password
+  PACK               CASES  PASS  FAIL  STRICTEST
+  attacker           1      1     0     BLOCK
+  byod               1      1     0     LIMITED
+  happy              1      1     0     ALLOW
+  insider            1      1     0     BLOCK
+  note-scenario      1      1     0     BLOCK
+  stolen-credential  1      1     0     STEPUPMFA
+  $ echo $?
+  0
+  ```
+  Re-capture rather than trust this block if any T7.2/T7.4 change could shift bytes —
+  the README must reproduce, not approximate. Clean up `audit.jsonl` after capture
+  (`rm -f audit.jsonl`)
+- Files: `README.md` (edit)
+- Depends: T7.2 (the `## Demo` section exists)
+- Acceptance: `[ "$(grep -c 'audit: 7 policies matched, decision appended to audit.jsonl' README.md)" -eq 1 ] && [ "$(grep -cx 3 README.md)" -eq 1 ] && [ "$(grep -c '^PASS ' README.md)" -eq 6 ] && grep -q 'flags precede\|flags come before\|flags-first' README.md && grep -q 'examples/attacker-signals.json' README.md`
+- Est: S
+
+### T7.4 — make run-demo reproduces the transcript; fresh-clone v1 check
+- Does: replace the Phase 0 `run-demo` stub with the pinned recipe (decision 4).
+  Verify from the repo: `make run-demo` twice — identical output both times
+  (idempotent via `rm -f audit.jsonl`), make exit 0 despite decide's exit 3, output =
+  the README Demo block minus `$`-prompt lines. Verify byte-exactness once by
+  diff: `make run-demo > /tmp/demo.out` vs README block with prompt lines stripped;
+  note the result in the run log. Then the v1 definition-of-done check **after
+  committing all Phase 7 changes** (decision 6):
+  `d=$(mktemp -d) && git clone -q . "$d/zt" && cd "$d/zt" && go build ./... && go test ./... -count=1 && make run-demo`
+  — exits 0, builds from nothing, prints the transcript. Finally: tick spec §10
+  Phase 7 boxes (T7.1–T7.4), `rm -f audit.jsonl`, write `plans/pr-phase7.md`
+- Files: `Makefile` (edit), `spec.md` (edit), `plans/plan.md` (edit — run log),
+  `plans/pr-phase7.md` (new)
+- Depends: T7.3 (the transcript that defines "reproduces")
+- Acceptance: `make run-demo > /tmp/demo.out && [ "$(grep -c 'audit: 7 policies matched, decision appended to audit.jsonl' /tmp/demo.out)" -eq 1 ] && [ "$(grep -cx 3 /tmp/demo.out)" -eq 1 ] && make run-demo > /tmp/demo2.out && cmp /tmp/demo.out /tmp/demo2.out && rm -f audit.jsonl` exits 0; plus the fresh-clone command above exits 0 with the transcript printed
+- Est: S
+
+## Done when (v1 exit criteria)
 ```
-go test ./... -count=1      # exit 0 — audit writer/reader, decide/run wiring, audit cmd green
-go vet ./...                # exit 0
-gofmt -l .                  # prints nothing
-make build
-./zt-sim decide examples/attacker-signals.json --audit audit.jsonl   # §5 table + audit footer, exit 3
-./zt-sim decide examples/attacker-signals.json --audit audit.jsonl   # exit 3 again; audit.jsonl now 2 lines, line 1 byte-identical
-./zt-sim audit audit.jsonl                                           # decisions re-printed + counts line, exit 0
-printf 'garbage\n' >> audit.jsonl && ./zt-sim audit audit.jsonl      # corrupt line 3 reported, exit 65
+gofmt -l .                      # prints nothing
+go vet ./...                    # exit 0
+go test ./... -count=1          # exit 0
+make run-demo                   # the README Demo transcript, byte for byte (minus $ prompts); exit 0
+# fresh clone (after the Phase 7 commits):
+d=$(mktemp -d) && git clone -q . "$d/zt" && cd "$d/zt" \
+  && go build ./... && go test ./... -count=1 && make run-demo   # exit 0, transcript printed
 rm -f audit.jsonl
 ```
-Plus: spec §10 Phase 6 "Done when" — re-running decide never mutates old lines;
-tests green.
+Plus: spec §10 Phase 7 boxes ticked; README covers what/why, install, usage, exit
+codes, §4 policy table, §6 scenario table, demo transcript; v1 definition of done met.
+
+---
+
+# Phase 6 — Audit log (complete, archived)
+
+> Goal: `--audit <file>` appends one JSONL record per decision from `decide` and `run`
+> (§7 — existing lines never rewritten), and `zt-sim audit <file>` re-prints the
+> decisions with action counts, reporting corrupt lines and exiting 65.
+> All tasks ✅ 2026-10-24 (run log above); full task detail in git history /
+> `plans/pr-phase6.md`.
+
+- T6.1 `report.AuditRecord` (Decision embedded → §7 field order) + `NewAuditWriter`
+  (`O_APPEND|O_CREATE|O_WRONLY`, injected `ts` clock) + `Append` (one Marshal+`\n`,
+  one Write) + `Close`
+- T6.2 `--audit` on decide + run (input validated before open; append failure → 65
+  beats strictest/0-1; footer `audit: %d policies matched, decision appended to %s`;
+  cmdRun gained its own FlagSet)
+- T6.3 `ReadAudit` (strict per-line decode, corrupt lines → errors with 1-based line
+  number, valid records still decode) + `AuditSummary` counts line + `cmdAudit`
+  (re-print via `report.Decisions`, corrupt → 65)
+- T6.4 sweep: `TestRun_AuditAppendOnly` (line 1 byte-identical across runs) +
+  `TestRun_AuditTruncated`; demo session; §5/§7 divergences pinned (flags-first,
+  run's `source` = pack path); spec §10 ticks
+
+Files: `internal/report/audit.go` + `audit_test.go`, `main.go` + `main_test.go`,
+`.gitignore`.
 
 ---
 
