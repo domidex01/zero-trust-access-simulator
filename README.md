@@ -11,6 +11,42 @@ evaluation, **least privilege** becomes narrowed `Limited` grants and role check
 is pure — no I/O, no clock, no randomness — so every decision is deterministic and
 table-testable.
 
+## How it works
+
+Every invocation walks the same path — signals in, one decision out, everything on the
+record:
+
+```mermaid
+flowchart LR
+    S["Sign-in request<br/>one Signal: user · role · app · location<br/>device posture · MFA · risk · local hour"] --> V{"strict validation<br/>unknown fields rejected"}
+    V -- "rejected → exit 65" --> ERR["input error<br/>nothing evaluated"]
+    V --> ENG["engine — pure, deterministic<br/>evaluates every policy<br/>in (priority, ID) order"]
+    PK[("policy pack P01–P11<br/>identity · devices ·<br/>data · applications")] -.-> ENG
+    ENG -- "no policy matched" --> FC["Block — fail closed<br/>assume breach"]
+    ENG -- "matches" --> SW["strictest match wins"]
+    SW --> D["Decision<br/>action · scope ·<br/>reasons · pillars"]
+    D --> OUT["table / JSON output<br/>exit code = severity"]
+    D -.-> AUD[("audit log JSONL<br/>append-only")]
+```
+
+The four actions form a strictness ladder — when several policies match, the one that
+leaves the *most verification* between the requester and the resource wins. A
+`Limited` grant hands out access now (merely narrowed); `StepUpMFA` withholds access
+until a second factor is presented:
+
+```mermaid
+flowchart LR
+    ALW["Allow<br/>exit 0"] --> LTD["Limited<br/>exit 1"] --> SU["StepUpMFA<br/>exit 2"] --> BLK["Block<br/>exit 3"]
+    style ALW fill:#a6e3a1,color:#1e1e2e
+    style LTD fill:#cba6f7,color:#1e1e2e
+    style SU fill:#f9e2af,color:#1e1e2e
+    style BLK fill:#f38ba8,color:#1e1e2e
+```
+
+Most permissive on the left, strictest on the right — which is also why the stolen-credential
+scenario ends in an MFA challenge rather than a read-only grant: an attacker holding only a
+password still has a verification layer to beat.
+
 ## Install
 
 Requires Go 1.27. Zero external dependencies — `go build` works offline.
@@ -48,7 +84,15 @@ The four outcomes, and how strict they are (strictest match wins):
 | Allow | all signals clean, low risk | 0 |
 | Limited | identity checks out, but device posture / least privilege caps the grant (read-only, time-boxed JIT) | 1 |
 | StepUpMFA | some doubt (no second factor yet, unfamiliar location, medium risk) → require MFA before any grant | 2 |
-| Block | high risk or hard-fail conditions | 3 |
+| Block | high risk or hard fail conditions | 3 |
+
+![zt-sim policies](docs/policies.svg)
+
+*The policy pack as the CLI lists it — the same 11 rows as the table below.*
+
+![zt-sim audit audit.jsonl](docs/audit.svg)
+
+*The audit subcommand re-prints a log and counts decisions by action.*
 
 ## Exit codes
 
@@ -97,6 +141,35 @@ Scenario packs live in `scenarios/*.json` (schema: `name`, `cases[]` of `signal`
 | `attacker.json` | everything wrong at once: no MFA, unfamiliar country, unmanaged device, high-risk app, risk 85 | **Block** | P01, P02, P03, P04, P06, P07, P10 — cites identity, devices, data, applications |
 
 ## Demo
+
+![zt-sim decide on the attacker fixture](docs/decide.svg)
+
+*Seven policies match the attacker's signal; the strictest (Block) wins, every match
+becomes an audit line, and the process exits 3.*
+
+The screenshot above, as a diagram — multiple policies can match, severity decides:
+
+```mermaid
+flowchart TD
+    N["attacker fixture: unknown user, throwaway mail domain<br/>no MFA · unfamiliar country · unmanaged device<br/>payroll-app · high sensitivity · risk 85"] --> SU["StepUpMFA, matched by<br/>P01 no second factor · P02 unfamiliar location"]
+    N --> LT["Limited, matched by<br/>P04 unmanaged device"]
+    N --> BL["Block, matched by<br/>P03 unfamiliar + no MFA · P06 sensitive data on non-compliant device<br/>P07 risk 85 &gt; 70 · P10 payroll-app outside role"]
+    SU --> F["strictest wins → Block"]
+    LT --> F
+    BL --> F
+    F --> O["exit 3 · 7 reasons in the audit trail<br/>pillars: identity · devices · data · applications"]
+    style BL fill:#f38ba8,color:#1e1e2e
+    style F fill:#f38ba8,color:#1e1e2e
+    style SU fill:#f9e2af,color:#1e1e2e
+    style LT fill:#cba6f7,color:#1e1e2e
+```
+
+![zt-sim run scenarios/](docs/run.svg)
+
+*All six packs pass — one scenario per action, so the acceptance suite can't go green
+by accident.*
+
+The same session as copy-pasteable text:
 
 ```sh
 $ ./zt-sim decide --audit audit.jsonl examples/attacker-signals.json

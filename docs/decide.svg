@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="715" height="266" viewBox="0 0 715 266">
+<rect width="715" height="266" rx="10" fill="#1e1e2e"/>
+<line x1="0" y1="38" x2="715" y2="38" stroke="#313244"/>
+<circle cx="24" cy="19" r="5.5" fill="#ff5f57"/>
+<circle cx="46" cy="19" r="5.5" fill="#febc2e"/>
+<circle cx="68" cy="19" r="5.5" fill="#28c840"/>
+<text x="357" y="23" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#7f849c">zt-sim decide — attacker-signals.json</text>
+<g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#cdd6f4">
+<text x="22" y="65" xml:space="preserve"><tspan fill="#89b4fa">USER                       ACTION  REASONS</tspan></text>
+<text x="22" y="86" xml:space="preserve"><tspan>unknown@throwaway.example  </tspan><tspan fill="#f38ba8">BLOCK</tspan><tspan>   P01: no second factor presented — verify explicitly</tspan></text>
+<text x="22" y="107" xml:space="preserve"><tspan>                                   P02: unfamiliar sign-in location — re-verify</tspan></text>
+<text x="22" y="128" xml:space="preserve"><tspan>                                   P03: unfamiliar location and no MFA — assume breach</tspan></text>
+<text x="22" y="149" xml:space="preserve"><tspan>                                   P04: unmanaged device — least-privilege grant</tspan></text>
+<text x="22" y="170" xml:space="preserve"><tspan>                                   P06: confidential/high data on non-compliant device</tspan></text>
+<text x="22" y="191" xml:space="preserve"><tspan>                                   P07: risk score above hard threshold</tspan></text>
+<text x="22" y="212" xml:space="preserve"><tspan>                                   P10: app outside requester's role — least privilege</tspan></text>
+<text x="22" y="233" xml:space="preserve"><tspan fill="#94e2d5">pillars: identity, devices, data, applications</tspan></text>
+<text x="22" y="254" xml:space="preserve"><tspan fill="#94e2d5">audit: 7 policies matched, decision appended to /tmp/zt-ss-audit.jsonl</tspan></text>
+</g>
+</svg>

@@ -55,6 +55,11 @@ plans/plan.md decision 4.
   idempotent across back-to-back runs (`cmp`-verified); audit.jsonl left at
   exactly 1 line.
 - **`spec.md`** — §10 Phase 7 boxes T7.1–T7.4 ticked.
+- **Post-phase addendum** (same PR, follow-up request): `## How it works` section with
+  two Mermaid diagrams (decision pipeline, strictness ladder), an attacker-walkthrough
+  Mermaid in `## Demo`, and four terminal screenshots (`docs/*.svg`) generated from
+  live output by `docs/term2svg.py` + `make screenshots`. README H2 count 6 → 7
+  (documented in the run log); no `.go` changes.
 
 ## Evidence (all on this branch)
 
