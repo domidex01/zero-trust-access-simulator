@@ -50,7 +50,7 @@
 ## Status
 Phase 7:
 - [x] T7.1 fmt/vet/test clean-baseline sweep (0 red expected)
-- [ ] T7.2 README.md: what/why, Install, Usage, Exit codes, Policies (§4), Scenarios (§6), Demo stub
+- [x] T7.2 README.md: what/why, Install, Usage, Exit codes, Policies (§4), Scenarios (§6), Demo stub
 - [ ] T7.3 Demo transcript in README: §5 session + `run scenarios/` summary, verbatim capture
 - [ ] T7.4 `make run-demo` reproduces the transcript from a clean build; fresh-clone v1 check; spec §10 ticks
 
@@ -101,6 +101,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - Phase 6 complete — §7 append-only JSONL + §5 audit subcommand satisfied; §10 Phase 6 done-when "re-running decide never mutates old lines" pinned by TestRun_AuditAppendOnly
 - review #7 fix ✅ 2026-10-24 — thermonuclear review: 5 findings, all fixed — F3 ReadAudit blessed trailing content after a valid record ({rec}{rec} silently dropped the second!) → dec.More() check + 2 red/green rows (trust boundary); F1 cmdRun walked with filepath.Join computed twice → hoisted; F2 usage grouped --format under decide/run though it's decide-only → "(decide only)"; F4 main-test records() was a pre-T6.3 lenient shim duplicating ReadAudit → routed through the real reader (CLI tests now writer→reader round-trips); F5 TestRun_DecideAudit's wantOut/wantErr fields dead → deleted · rejected with reasons: shared auditSink type over open/append/close/footer (two call sites, different shapes — wrapper adds a layer to save ~8 lines), append-inside-evaluate-loop (interleaves IO), map over [4]int · noted: main_test.go 766 lines — split per subcommand if Phase 7 grows it · coverage after: report 93.4%, main 87.3%
 - T7.1 ✅ 2026-10-25 — sweep: 0 red (plan-time baseline re-verified; T1.5/T2.4/T3.3/T4.3/T5.5/T6.4 precedent) · gofmt -l . empty · vet 0 · 6 packages ok, no .go files touched
+- T7.2 ✅ 2026-10-25 — red: acceptance exit 1 (test -f README.md — file absent) · green: 1 attempt · 6 H2s / 11 policy rows / 6 scenario rows verified · usage strings copied from main.go's consts, not the §5 sketch · suite green, 0 .go files touched
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 7)
