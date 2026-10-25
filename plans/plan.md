@@ -107,6 +107,7 @@ Phase 0 (complete): T1 ✅ · T2 ✅ · T3 ✅
 - T7.2 ✅ 2026-10-25 — red: acceptance exit 1 (test -f README.md — file absent) · green: 1 attempt · 6 H2s / 11 policy rows / 6 scenario rows verified · usage strings copied from main.go's consts, not the §5 sketch · suite green, 0 .go files touched
 - T7.3 ✅ 2026-10-25 — red: anchors 0 (Demo header-only) · green: 1 attempt + 1 wording fix (README "Flags come before" → "flags come before" to match the pinned anchor — README side fixed, test untouched) · transcript assembled from /tmp captures by cat, not hand-typed (T5.1 indent-drift precedent); diff vs live output: byte-exact · decide exit 3, run exit 0, audit.jsonl 1 line, cleaned up
 - T7.4 ✅ 2026-10-25 — red: stub anchors 0 · green: 1 attempt + 2 fixes (build recipe `@`-silenced — run-demo's first line was make's own echo; run line gained `; echo $$?` — plan bug: pinned recipe omitted it while the pinned transcript ends with `0`; Makefile fixed, acceptance unchanged) · make exit 0 despite decide's 3 · idempotent (cmp) · byte-exact vs README transcript · audit.jsonl 1 line, cleaned up · fresh-clone v1 check: see below
+- T7.4 fresh-clone ✅ 2026-10-25 — git clone of the branch → go build ./... · go test ./... -count=1 (6 ok) · make run-demo exit 0, output byte-exact (diff) vs the repo run · v1 definition of done met
 (appended by execute-plan)
 
 ## Not building (YAGNI, Phase 7)
